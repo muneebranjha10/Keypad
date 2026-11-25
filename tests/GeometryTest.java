@@ -40,6 +40,9 @@ public final class GeometryTest {
   check(Geometry.oneHintId("dialpad_key_image"),"generic voicemail icon");check(Geometry.oneHintId("dialpad_key_1_letter_text_view"),"alternate voicemail icon");check(Geometry.oneHintId(""),"idless inflated image");check(!Geometry.oneHintId("delete_button_image"),"never hide backspace");check(!Geometry.oneHintId("dialpad_key_number"),"never hide digit");
   close(Geometry.glyphHeight(68),45.56f);close(Geometry.calculatorRecoilScale(1,39,1),1-3f/39);close(Geometry.calculatorRecoilScale(0,39,1),1);
   for(boolean quick:new boolean[]{false,true}){close(Geometry.keyGlow(.1f,0,false,quick),.1f);close(Geometry.keyGlow(.1f,1,false,quick),0);close(Geometry.keyRecoil(.1f,0,false,quick),.1f);close(Geometry.keyRecoil(.1f,1,false,quick),0);for(int z=0;z<=100;z++){float t=z/100f,g=Geometry.keyGlow(.1f,t,false,quick),r=Geometry.keyRecoil(.1f,t,false,quick);check(g>=0&&g<=1&&r>=-.15f&&r<=1,"continuous key animation bounds");}}
+  check(Geometry.appendRun("123","1234"),"append raw");check(Geometry.appendRun("","*"),"first symbol");check(!Geometry.appendRun("123","12"),"deletion fallback");check(!Geometry.appendRun("12","132"),"middle fallback");check(!Geometry.appendRun("123","1,234"),"formatting fallback");check(Geometry.simpleDialRun("+1 (23)-4"),"safe run");check(!Geometry.simpleDialRun("1A"),"unsupported run");
+  close(Geometry.lerp(50,30,0),50);close(Geometry.lerp(50,30,1),30);close(Geometry.lerp(50,30,.5f),40);
+  for(int k=0;k<=100;k++){float t=k/100f;float x=Geometry.lerp(100,80,t);check(x>=80&&x<=100,"reflow bounds");}
   System.out.println("Geometry checks passed: "+count);
  }
 }

@@ -23,7 +23,7 @@ final class Visuals {
   final Paint digitPaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);final Rect digitInk=new Rect(),referenceInk=new Rect();
   String digit;Typeface digitFont;int digitColor;float digitEnabled,digitRadius=Float.NaN;
   void setDigit(String value,Typeface font,int color,float enabled){if(java.util.Objects.equals(digit,value)&&digitFont==font&&digitColor==color&&digitEnabled==enabled)return;digit=value;digitFont=font;digitColor=color;digitEnabled=enabled;digitRadius=Float.NaN;invalidateSelf();}
-  void prepareDigit(float radius){if(digit==null||digitFont==null||digitRadius==radius)return;digitRadius=radius;digitPaint.setTypeface(digitFont);digitPaint.setTextAlign(Paint.Align.LEFT);digitPaint.setTextSize(32*dp);digitPaint.getTextBounds("8",0,1,referenceInk);if(referenceInk.height()>0)digitPaint.setTextSize(32*dp*Geometry.glyphHeight(radius)/referenceInk.height());digitPaint.getTextBounds(digit,0,digit.length(),digitInk);}
+  void prepareDigit(float radius){if(digit==null||digitFont==null||digitRadius==radius)return;digitRadius=radius;digitPaint.setTypeface(digitFont);digitPaint.setTextAlign(Paint.Align.LEFT);digitPaint.setTextSize(32*dp);digitPaint.getTextBounds("8",0,1,referenceInk);if(referenceInk.height()>0)digitPaint.setTextSize(32*dp*Geometry.glyphHeight(radius)/referenceInk.height());digitPaint.getTextBounds(digit,0,digit.length(),digitInk);if(("*".equals(digit)||"＊".equals(digit))&&digitInk.height()>0){digitPaint.setTextSize(Math.min(digitPaint.getTextSize()*1.75f,digitPaint.getTextSize()*Geometry.glyphHeight(radius)*.92f/digitInk.height()));digitPaint.getTextBounds(digit,0,digit.length(),digitInk);}}
   void drawDigit(Canvas c,float x,float y,float radius){if(digit==null||digitFont==null)return;prepareDigit(radius);int color=digitColor;if(digitEnabled>0){int r=Math.round(Color.red(color)+(153-Color.red(color))*glow),g=Math.round(Color.green(color)+(222-Color.green(color))*glow),b=Math.round(Color.blue(color)+(210-Color.blue(color))*glow);color=Color.argb(Color.alpha(color),r,g,b);}digitPaint.setColor(color);c.drawText(digit,x-(digitInk.left+digitInk.right)*.5f,y-(digitInk.top+digitInk.bottom)*.5f,digitPaint);}
   Runnable frame;
   final Paint bitmapPaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
@@ -57,7 +57,7 @@ final class Visuals {
     Geometry.haloStops(edge),Shader.TileMode.CLAMP));
    q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawRect(0,0,size,size,q);
   }
-  @Override protected void onBoundsChange(Rect bounds){super.onBoundsChange(bounds);halo=null;}
+  @Override protected void onBoundsChange(Rect bounds){super.onBoundsChange(bounds);halo=null;warm();}
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
