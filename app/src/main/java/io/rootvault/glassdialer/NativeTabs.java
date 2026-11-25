@@ -92,17 +92,17 @@ final class NativeTabs {
     int[] a=new int[2],b=new int[2];strip.getLocationOnScreen(a);nativeIndicator.getLocationOnScreen(b);
     initialIndicatorX=b[0]-a[0];originalTranslation=nativeIndicator.getTranslationX();
     indicatorRef=new java.lang.ref.WeakReference<>(nativeIndicator);
+    translated=true;
     for(ViewParent parent=nativeIndicator.getParent();parent instanceof ViewGroup;parent=parent.getParent()){
      ViewGroup vg=(ViewGroup)parent;clipChildren.put(vg,vg.getClipChildren());clipPadding.put(vg,vg.getClipToPadding());vg.setClipChildren(false);vg.setClipToPadding(false);if(vg==strip)break;
     }
-    translated=true;
    }
    if(nativeIndicator==null||!nativeIndicator.isAttachedToWindow()){cancelled=true;resetIndicator();return;}
    float min=Float.MAX_VALUE,max=-Float.MAX_VALUE;for(View c:tabs(strip)){min=Math.min(min,c.getLeft());max=Math.max(max,c.getRight());}
    nativeIndicator.setTranslationX(originalTranslation+Geometry.tabOffset(initialIndicatorX,nativeIndicator.getWidth(),dx,min,max));
   }
   View destination(HorizontalScrollView host,MotionEvent e){
-   if(!valid(host))return null;int i=e.findPointerIndex(pointer);if(i<0)return null;
+   if(!valid(host))return null;int i=e.findPointerIndex(pointer);if(i<0||Math.abs(e.getY(i)-startY)>Math.max(slop*2,Math.abs(e.getX(i)-startX)))return null;
    ViewGroup strip=stripRef.get();View selected=selectedRef.get();ArrayList<View> list=tabs(strip);float[] centers=new float[list.size()];
    for(int k=0;k<centers.length;k++){View c=list.get(k);centers[k]=(c.getLeft()+c.getRight())*.5f;}
    float center=(selected.getLeft()+selected.getRight())*.5f+e.getX(i)-startX;
@@ -115,7 +115,7 @@ final class NativeTabs {
    for(ViewGroup v:new ArrayList<>(clipChildren.keySet())){if(v!=null){Boolean children=clipChildren.get(v),padding=clipPadding.get(v);if(children!=null)v.setClipChildren(children);if(padding!=null)v.setClipToPadding(padding);}}
    clipChildren.clear();clipPadding.clear();
   }
-  void finish(View v){resetIndicator();if(owned&&v.getParent()!=null)v.getParent().requestDisallowInterceptTouchEvent(false);gestures.remove(v);v.removeOnAttachStateChangeListener(this);}
+  void finish(View v){try{resetIndicator();}finally{try{if(owned&&v.getParent()!=null)v.getParent().requestDisallowInterceptTouchEvent(false);}finally{gestures.remove(v);v.removeOnAttachStateChangeListener(this);}}}
   @Override public void onViewAttachedToWindow(View v){}
   @Override public void onViewDetachedFromWindow(View v){finish(v);}
  }

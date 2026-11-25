@@ -41,6 +41,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   if(key!=null&&ViewGroup.class.isAssignableFrom(key))try{installKey(key);log("keypad hooks installed");}catch(Throwable e){log("keypad hooks unavailable: "+e);}
   else log("keypad class missing; stock UI retained");
   try{NativeTabs.install(p.classLoader);log("native Samsung tab drag installed");}catch(Throwable t){log("native tab drag unavailable: "+t);}
+  try{installHintGuard();}catch(Throwable t){log("voicemail draw guard unavailable: "+t);}
   try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
   try{EntryMotion.install();installEntry(p.classLoader);}catch(Throwable e){log("entry animation unavailable: "+e);}
  }
@@ -113,6 +114,28 @@ public final class Hooks implements IXposedHookLoadPackage {
    }catch(Throwable t){log("dialpad detail: "+t);}}
   });
  }
+ private static boolean oneKey(View root){
+  if(Geometry.oneKeyId(idName(root)))return true;
+  View digit=descendant(root,"dialpad_key_number");
+  if(digit==null)digit=descendant(root,"dialpad_key_1_text_view");
+  return digit instanceof TextView&&"1".contentEquals(((TextView)digit).getText());
+ }
+ private static void installHintGuard()throws Exception {
+  // The APK uses a generic image resource for voicemail; suppress only its drawing under key 1.
+  XposedBridge.hookMethod(ViewGroup.class.getDeclaredMethod("drawChild",Canvas.class,View.class,long.class),new XC_MethodHook(){
+   @Override protected void beforeHookedMethod(MethodHookParam p){
+    try{View child=(View)p.args[1];if(!(child instanceof ImageView))return;
+     String name=idName(child);if(!Geometry.oneHintId(name))return;
+     View root=(View)p.thisObject;
+     for(int depth=0;root!=null&&depth<8;depth++){
+      KeyState state=keys.get(root);
+      if(state!=null){if(state.captured&&!state.failed&&oneKey(root))p.setResult(false);return;}
+      android.view.ViewParent parent=root.getParent();root=parent instanceof View?(View)parent:null;
+     }
+    }catch(Throwable ignored){}
+   }
+  });
+ }
  private static boolean sameGrid(View a,View b){
   View x=a;for(int i=0;i<5&&x!=null;i++){View y=b;for(int j=0;j<5&&y!=null;j++){if(x==y&&x!=a&&x!=b)return true;android.view.ViewParent p=y.getParent();y=p instanceof View?(View)p:null;}android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;
  }
@@ -133,7 +156,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   boolean primaryLabel(TextView t){String s=t.getText()==null?"":t.getText().toString().trim();return "dialpad_key_number".equals(idName(t))||s.matches("[0-9*#＊＃]")||(s.length()==1&&Character.isDigit(s.charAt(0)));}
   void hideHint(View v){if(!hiddenHints.containsKey(v))hiddenHints.put(v,v.getAlpha());if(v.getAlpha()!=0f)v.setAlpha(0f);}
   void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();{if(primaryLabel(t)){if(hiddenHints.containsKey(t)){t.setAlpha(hiddenHints.remove(t));}if(!labels.containsKey(t))labels.put(t,t.getTextColors());}else if(!s.isEmpty()){hideHint(t);}}}
-   if(v instanceof ImageView){String n=idName(v);if(n.contains("voicemail")||n.contains("letter")||n.contains("sub_"))hideHint(v);}
+   if(v instanceof ImageView){String n=idName(v);View root=view.get();if(n.contains("voicemail")||n.contains("letter")||n.contains("sub_")||(root!=null&&oneKey(root)&&Geometry.oneHintId(n)))hideHint(v);}
    if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
   void paintFrame(){View v=view.get();if(v==null||!captured)return;
    // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
@@ -168,7 +191,7 @@ public final class Hooks implements IXposedHookLoadPackage {
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator recoil keypad active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
   void restore(View v){skin.stop();resetAlignment();for(View h:new ArrayList<>(hiddenHints.keySet()))if(h!=null)h.setAlpha(hiddenHints.get(h));hiddenHints.clear();for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));labels.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
-  @Override public void onViewAttachedToWindow(View v){apply(v);v.post(()->{if(v.isAttachedToWindow())alignGrid(v);});}
+  @Override public void onViewAttachedToWindow(View v){apply(v);v.post(()->{if(v.isAttachedToWindow()){apply(v);alignGrid(v);}});}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);alignGrid(v);}
  }

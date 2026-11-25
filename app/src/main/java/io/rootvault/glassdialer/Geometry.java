@@ -16,6 +16,8 @@ final class Geometry {
  static float fitLeft(float center,float width,float min,float max){return clamp(center-width*.5f,min,Math.max(min,max-width));}
  static float centerShift(float min,float max,float size,float limit){if(!Float.isFinite(min)||!Float.isFinite(max)||max<min||max-min>size)return 0;float d=(size-min-max)*.5f;return Math.abs(d)<=limit?clamp(d,-min,size-max):0;}
  static boolean hit(float x,float y,float w,float h,float slop){return Float.isFinite(x)&&Float.isFinite(y)&&w>0&&h>0&&x>=-slop&&y>=-slop&&x<=w+slop&&y<=h+slop;}
+ static boolean oneKeyId(String id){return "one".equals(id)||"dialpad_key_1_layout".equals(id);}
+ static boolean oneHintId(String id){return "dialpad_key_image".equals(id)||"dialpad_key_1_letter_text_view".equals(id)||"dialpad_key_image_stub".equals(id)||"".equals(id);}
  static boolean horizontalDrag(float dx,float dy,float slop){return Float.isFinite(dx)&&Float.isFinite(dy)&&Math.abs(dx)>slop&&Math.abs(dx)>Math.abs(dy)*1.25f;}
  static float tabOffset(float origin,float width,float dx,float min,float max){return clamp(origin+dx,min,Math.max(min,max-width))-origin;}
  static float spring(float t){if(t<=0)return 0;if(t>=1)return 1;return 1-(float)(Math.exp(-7.4*t)*Math.cos(9.3*t));}

@@ -45,3 +45,6 @@ Remove custom slider and all custom tab gesture hooks. Native Samsung tabs resto
 
 ## v1.4
 Increase circle maximum diameter from 72dp to 78dp with adaptive bounds and glow margins. Keep native Samsung tab visual and click behavior; scoped horizontal drag translates the existing selected indicator if present, restores it and original clipping flags on release/cancel, then selects the destination via native click. If the indicator cannot be resolved, swipe-to-select on release still works. No custom glass drawable. Deduplicate formatted digit callbacks, cancel old animators on reduced-motion transition, cache glow shaders, avoid redundant key rebinding. Tests cover geometry and gesture thresholds, not device UI. Runtime appearance, native tab selection and 120 Hz require testing.
+
+## v1.5
+Remove the generic dialpad_key_image from key 1 (APK verified resource ID names: one, dialpad_key_image, dialpad_key_1_letter_text_view). Suppress only visual hint drawing and preserve native voicemail long press. Reapply after view inflation; protect indicator cleanup on interrupted swipes and reject strongly vertical releases. Refresh digit state on detach. Larger key sizing, native tab appearance, red-only delete, and AMOLED remain. Runtime verification still required.

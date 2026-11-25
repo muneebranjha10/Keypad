@@ -27,7 +27,7 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
  private static final long DURATION=210;
  private final TextPaint glyphPaint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
  private EntryMotion(EditText v){editor=v;previous=Geometry.dialString(v.getText());v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
- static void attach(EditText v){if(instances.containsKey(v))return;EntryMotion m=new EntryMotion(v);instances.put(v,new WeakReference<>(m));}
+ static void attach(EditText v){WeakReference<EntryMotion> existing=instances.get(v);if(existing!=null&&existing.get()!=null)return;EntryMotion m=new EntryMotion(v);instances.put(v,new WeakReference<>(m));}
  static void install()throws Exception {
   XposedBridge.hookMethod(android.widget.TextView.class.getDeclaredMethod("onDraw",Canvas.class),new XC_MethodHook(){
    @Override protected void beforeHookedMethod(MethodHookParam p){
@@ -52,7 +52,7 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
   editor.postInvalidateOnAnimation();
  }
  @Override public void onViewAttachedToWindow(View v){previous=Geometry.dialString(editor.getText());active.clear();}
- @Override public void onViewDetachedFromWindow(View v){active.clear();}
+ @Override public void onViewDetachedFromWindow(View v){active.clear();previous=Geometry.dialString(editor.getText());}
  private Frame prepare(Canvas c){
   if(active.isEmpty())return null;
   if(!ValueAnimator.areAnimatorsEnabled()){active.clear();return null;}

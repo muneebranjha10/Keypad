@@ -36,6 +36,8 @@ public final class GeometryTest {
   check(Geometry.horizontalDrag(30,5,8),"horizontal drag");check(!Geometry.horizontalDrag(5,30,8),"vertical ignored");check(!Geometry.horizontalDrag(5,0,8),"tap ignored");check(Geometry.horizontalDrag(-30,5,8),"reverse drag");
   close(Geometry.tabOffset(100,80,-200,0,300),-100);close(Geometry.tabOffset(100,80,300,0,300),120);close(Geometry.tabOffset(100,80,30,0,300),30);
   for(int w=10;w<=300;w+=10)for(int dx=-400;dx<=400;dx+=10){float start=(300-w)*.5f;float left=start+Geometry.tabOffset(start,w,dx,0,300);check(left>=-.001f&&left+w<=300.001f,"native indicator bounds");}
+  check(Geometry.oneKeyId("one"),"native one id");check(Geometry.oneKeyId("dialpad_key_1_layout"),"alternate one id");check(!Geometry.oneKeyId("two"),"not other keys");
+  check(Geometry.oneHintId("dialpad_key_image"),"generic voicemail icon");check(Geometry.oneHintId("dialpad_key_1_letter_text_view"),"alternate voicemail icon");check(Geometry.oneHintId(""),"idless inflated image");check(!Geometry.oneHintId("delete_button_image"),"never hide backspace");check(!Geometry.oneHintId("dialpad_key_number"),"never hide digit");
   System.out.println("Geometry checks passed: "+count);
  }
 }
