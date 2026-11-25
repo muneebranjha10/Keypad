@@ -75,7 +75,7 @@ final class Amoled {
  private static boolean surfaceView(View v){
   if(!(v instanceof ViewGroup)||v instanceof RadioGroup||v instanceof Spinner||v.isClickable()||v.isLongClickable()||v.isFocusable())return false;
   String n=name(v),c=v.getClass().getName().toLowerCase(java.util.Locale.ROOT);
-  if(n.matches(".*(button|btn|icon|avatar|badge|indicator|switch|checkbox|radio|ripple|tab_item|chip|call_button).*")||c.contains("tablayout")||c.contains("keypadbutton"))return false;
+  if(n.matches(".*(button|btn|icon|avatar|badge|indicator|switch|checkbox|radio|ripple|tab_item|chip|call_button).*")||c.contains("tablayout")||c.contains("keypadbutton")||c.contains("slidingtabindicator")||c.contains("dialpadcallbutton"))return false;
   return true;
  }
  private static boolean recolor(Drawable d,int depth){

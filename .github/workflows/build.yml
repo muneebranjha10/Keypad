@@ -23,6 +23,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - name: Test keypad and slider geometry
+        run: |
+          mkdir -p /tmp/geometry-tests
+          javac -d /tmp/geometry-tests app/src/main/java/io/rootvault/glassdialer/Geometry.java tests/GeometryTest.java
+          java -cp /tmp/geometry-tests io.rootvault.glassdialer.GeometryTest
       - run: gradle --no-daemon :app:assembleDebug
       - name: Verify APK signature
         run: $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
@@ -35,6 +40,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v0.6-beta.apk
-          gh release view v0.6-beta >/dev/null 2>&1 || gh release create v0.6-beta --prerelease --title 'Glass Dialer v0.6 Beta' --notes 'Experimental LSPosed module. Device testing required.'
-          gh release upload v0.6-beta GlassDialer-v0.6-beta.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v0.7-beta.apk
+          for attempt in 1 2 3 4; do
+            if (gh release view v0.7-beta >/dev/null 2>&1 || gh release create v0.7-beta --prerelease --target "$GITHUB_SHA" --title 'Glass Dialer v0.7 Beta' --notes 'Experimental LSPosed module. Device testing required.') && gh release upload v0.7-beta GlassDialer-v0.7-beta.apk --clobber; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          echo "::warning::Release API unavailable; signed APK remains available in Actions artifacts."

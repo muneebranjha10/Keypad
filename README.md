@@ -21,3 +21,6 @@ Enable system Dark mode. Samsung Dialer resource allowlist and guarded neutral s
 
 ## v0.6
 Retains v0.5 dark AMOLED theme; re-enables experimental keypad and slider. Same visual radius across visible keypad keys, centered primary digits with guarded adjustment, spring release, improved short-tap visibility, velocity-assisted drag settling and native tab model selection fallback on the supplied firmware. No claim of device validation, exact glass refraction or universal alignment. Test portrait, landscape, font sizes and all three tabs. Disable module if dialing is affected.
+
+## v0.7 — source audit
+Keep native digit/letter stack intact, shared radius across keys, avoid repeated spring restart during layout, bound gradient stops, handle interrupted gestures, restrict red feedback to delete background instead of entire call layout, avoid duplicate native tab selection. Added pure-Java geometry regression checks to CI; these are not Android UI tests. Release publish retries and Actions artifact fallback. Device testing remains necessary.

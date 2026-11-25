@@ -40,7 +40,7 @@ final class Visuals {
    motion.setInterpolator(down?new PathInterpolator(.25f,0f,.25f,1f):new PathInterpolator(.18f,.86f,.24f,1.24f));
    motion.addUpdateListener(a->{recoil=(float)a.getAnimatedValue();change();});motion.start();
   }
-  void stop(){if(anim!=null)anim.cancel();if(motion!=null)motion.cancel();pressed=false;glow=recoil=0;change();}
+  void stop(){if(anim!=null)anim.cancel();if(motion!=null)motion.cancel();anim=motion=null;pressed=false;glow=recoil=0;halo=null;change();}
   void prepareHalo(int size,float radius){
    if(halo!=null&&haloSize==size&&Math.abs(haloRadius-radius)<.5f)return;
    haloSize=size;haloRadius=radius;halo=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
@@ -51,13 +51,13 @@ final class Visuals {
    c.drawCircle(center,center,center,q);
    float edge=Math.min(.91f,radius/center);
    q.setShader(new RadialGradient(center,center,center,new int[]{0x08000000,0x14000000,0x35000000,0x79000000,0x43000000,0x00000000},
-    new float[]{0,edge*.54f,edge*.78f,edge,Math.min(.97f,edge+.05f),1},Shader.TileMode.CLAMP));
+    Geometry.haloStops(edge),Shader.TileMode.CLAMP));
    q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawCircle(center,center,center,q);
   }
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
-   float radius=Math.min(available*.425f,commonRadius>0?commonRadius:36*dp);
+   float radius=Math.min(Geometry.radius(b.width(),b.height(),dp),commonRadius>0?commonRadius:36*dp);
    int base=dark?0xff171717:0xfffcfcff;
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
@@ -66,7 +66,7 @@ final class Visuals {
     p.setColor(Color.WHITE);p.setShader(new RadialGradient(x,y,radius,new int[]{0x00000000,0x00000000,0x31000000,0x61000000},new float[]{0,.58f,.90f,1},Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
    }
    if(glow>.002f){
-    int size=Math.max(8,(int)available);
+    int size=Math.max(8,(int)Math.min(available,2*(radius+8*dp)));
     prepareHalo(size,radius);
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
     c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
@@ -79,13 +79,13 @@ final class Visuals {
   final RectF t=new RectF(),inner=new RectF();
   Tabs(float dp,boolean dark){super(dp,dark);}
   void move(float l,float r,boolean animate){
-   if(!Float.isFinite(l)||r<=l)return;
-   if(Float.isFinite(left)&&Math.abs(targetL-l)<.1f&&Math.abs(targetR-r)<.1f&&lift==0&&Math.abs(stretch)<.01f&&(!animate||anim!=null&&anim.isRunning()||Math.abs(left-l)<.1f)){invalidateSelf();return;}
+   if(!Float.isFinite(l)||!Float.isFinite(r)||r<=l)return;
+   if(Float.isFinite(left)&&Math.abs(targetL-l)<.1f&&Math.abs(targetR-r)<.1f&&lift==0){if(animate&&anim!=null&&anim.isRunning())return;if(Math.abs(left-l)<.1f&&Math.abs(right-r)<.1f&&Math.abs(stretch)<.01f)return;}
    targetL=l;targetR=r;if(anim!=null)anim.cancel();
    if(!animate||!Float.isFinite(left)){left=l;right=r;stretch=0;invalidateSelf();return;}
    float a=left,b=right;anim=ValueAnimator.ofFloat(0,1);anim.setDuration(390);
    anim.setInterpolator(new android.view.animation.LinearInterpolator());
-   anim.addUpdateListener(v->{float f=(float)v.getAnimatedValue();float t=f>=1f?1f:1f-(float)(Math.exp(-7.4*f)*Math.cos(9.3*f));left=a+(l-a)*t;right=b+(r-b)*t;stretch=(float)Math.sin(Math.PI*f)*Math.min(2.5f*dp,Math.abs(l-a)*.045f);invalidateSelf();});anim.start();
+   anim.addUpdateListener(v->{float f=(float)v.getAnimatedValue();float t=Geometry.spring(f);left=a+(l-a)*t;right=b+(r-b)*t;stretch=(float)Math.sin(Math.PI*f)*Math.min(2.5f*dp,Math.abs(l-a)*.045f);invalidateSelf();});anim.start();
   }
   void drag(float l,float r){if(anim!=null)anim.cancel();left=l;right=r;targetL=l;targetR=r;lift=1;stretch=1.3f*dp;invalidateSelf();}
   void stop(){if(anim!=null)anim.cancel();lift=stretch=0;left=right=Float.NaN;invalidateSelf();}
