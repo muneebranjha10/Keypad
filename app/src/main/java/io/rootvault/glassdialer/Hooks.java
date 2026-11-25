@@ -37,6 +37,7 @@ public final class Hooks implements IXposedHookLoadPackage {
  @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p){
   if(!PKG.equals(p.packageName)||!PKG.equals(p.processName)||installed)return;installed=true;
   try{Amoled.install();}catch(Throwable t){log("AMOLED install failed: "+t);}
+  try{ContactsCredit.install();}catch(Throwable t){log("contacts credit unavailable: "+t);}
   // Keep the stock Samsung tab visuals and add a scoped swipe gesture.
   Class<?> key=find(KEY,p.classLoader);
   if(key!=null&&ViewGroup.class.isAssignableFrom(key))try{installKey(key);log("keypad hooks installed");}catch(Throwable e){log("keypad hooks unavailable: "+e);}

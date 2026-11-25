@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
  <application android:label="Glass Dialer" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:icon="@android:drawable/ic_menu_call">
  <meta-data android:name="xposedmodule" android:value="true"/>
- <meta-data android:name="xposeddescription" android:value="Calculator glow keypad and draggable glass navigation for Samsung Phone"/>
+ <meta-data android:name="xposeddescription" android:value="Glass Dialer by s23_hype — Calculator-style Samsung Phone keypad"/>
  <meta-data android:name="xposedminversion" android:value="82"/>
  <meta-data android:name="xposedscope" android:value="com.samsung.android.dialer"/>
  <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>

@@ -54,3 +54,6 @@ Screenshot measurements (754px width): Calculator digit ink heights 44–46px ve
 
 ## v1.7
 Recording inspection shows new digits fading while earlier centered digits jump to their next positions. For ordinary single-line append operations, render the existing digits from their last displayed positions to their new native layout positions, and slide/fade the appended digit using the same 250ms curve. Rebase mid-flight during rapid taps, start on first eligible draw, avoid per-glyph clip/layer allocations, retain native cursor and editable contents. Fall back for formatting changes, deletion, mid-string insertion, RTL and ellipsis. Also correct visually undersized asterisk and warm glow on bounds changes. Native performance and exact visual fidelity remain unverified; capture FPS is not rendering FPS.
+
+## v1.8 release
+Creator credit in the verified main Contacts layout, animated Telegram welcome and LSPosed setup guide. Welcome shown on a fresh module launch; Telegram join is optional, no account verification. No modifications to v1.7 keypad, entry animation or navigation. Release branding removes beta from current version; existing historical beta notes remain. New Contacts footer and welcome need device testing. Channel: https://t.me/s23_hype
