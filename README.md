@@ -1,4 +1,4 @@
-# Glass Dialer 0.4 Beta
+# Glass Dialer 0.5 AMOLED
 Experimental LSPosed module for Samsung Phone. Calculator-style glowing number keys and translucent draggable navigation capsule for Keypad, Recents and Contacts. Based on class names from the supplied Samsung Dialer APK. This is a custom glass approximation, not true optical refraction or a copy of proprietary calculator rendering.
 
 ## Install
@@ -15,3 +15,6 @@ Uses original APK resource palette: calc_keypad_number_button_bg, keypad_number,
 
 ## v0.4
 Correct normal-dialer backspace layout (DialpadCallButtonLayout with delete_button_background_layout and delete_button_image, from res/oC1.xml); stop competing stock keypad visual animator when present; move diffuse glow above the opaque key fill so it is not hidden, slightly larger keys, reduce metallic rim on tabs. This remains a custom material rather than a pixel-identical port. Validate on device.
+
+## v0.5 — AMOLED-only test
+Enable system Dark mode. Samsung Dialer resource allowlist and guarded neutral surface recoloring target main app windows, keypad, recents, contacts, search, settings, cards and dialogs. Full coverage is not device-verified. Text, colored controls, ripple/selector state and calling behavior are not intentionally changed. Previous custom keypad/slider hooks are kept in source but disabled in this test build. InCallUI and separate Contacts processes are not targeted. Light mode is stock. Debug signatures may differ between runs.

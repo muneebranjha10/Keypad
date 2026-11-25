@@ -37,6 +37,9 @@ public final class Hooks implements IXposedHookLoadPackage {
  private static Method declared(Class<?> c,String name,Class<?>... sig)throws Exception {Method m=c.getDeclaredMethod(name,sig);m.setAccessible(true);return m;}
  @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p){
   if(!PKG.equals(p.packageName)||!PKG.equals(p.processName)||installed)return;installed=true;
+  try{Amoled.install();}catch(Throwable t){log("AMOLED install failed: "+t);}
+  // Isolate the requested whole-app theme from earlier experimental effects.
+  if(themeOnly())return;
   Class<?> key=find(KEY,p.classLoader),tab=find(TAB,p.classLoader);
   if(key!=null&&ViewGroup.class.isAssignableFrom(key))try{installKey(key);log("keypad hooks installed");}catch(Throwable e){log("keypad hooks unavailable: "+e);}
   else log("keypad class missing; stock UI retained");
@@ -44,6 +47,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   else log("tab class missing; stock UI retained");
   try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
  }
+ private static boolean themeOnly(){return true;}
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}

@@ -35,6 +35,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v0.4-beta.apk
-          gh release view v0.4-beta >/dev/null 2>&1 || gh release create v0.4-beta --prerelease --title 'Glass Dialer v0.4 Beta' --notes 'Experimental LSPosed module. Device testing required.'
-          gh release upload v0.4-beta GlassDialer-v0.4-beta.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v0.5-amoled.apk
+          gh release view v0.5-amoled >/dev/null 2>&1 || gh release create v0.5-amoled --prerelease --title 'Glass Dialer v0.5 AMOLED' --notes 'Experimental LSPosed module. Device testing required.'
+          gh release upload v0.5-amoled GlassDialer-v0.5-amoled.apk --clobber
