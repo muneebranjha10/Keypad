@@ -11,6 +11,8 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.TextView;
+import android.widget.EditText;
+import android.graphics.Rect;
 import android.widget.ImageView;
 import android.animation.ArgbEvaluator;
 import java.lang.ref.WeakReference;
@@ -46,8 +48,15 @@ public final class Hooks implements IXposedHookLoadPackage {
   if(tab!=null&&HorizontalScrollView.class.isAssignableFrom(tab))try{installTabs(tab);log("tab hooks installed");}catch(Throwable e){log("tab hooks unavailable: "+e);}
   else log("tab class missing; stock UI retained");
   try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
+  try{installEntry(p.classLoader);}catch(Throwable e){log("entry animation unavailable: "+e);}
  }
  private static boolean themeOnly(){return false;}
+ private static final WeakHashMap<View,Boolean> entryViews=new WeakHashMap<>();
+ private static void installEntry(ClassLoader l)throws Exception {
+  Class<?> c=find(PKG+".dialpad.view.widget.EllipsisEditText",l);
+  if(c==null||!EditText.class.isAssignableFrom(c))return;
+  XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{EditText e=(EditText)p.thisObject;if(entryViews.containsKey(e))return;entryViews.put(e,true);EntryMotion.attach(e);}catch(Throwable t){log("entry init: "+t);}}});
+ }
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
@@ -66,7 +75,19 @@ public final class Hooks implements IXposedHookLoadPackage {
  private static boolean blackSurface(View v){String n=idName(v);return "keypad_fragment".equals(n)||"keypad_view".equals(n)||"dialpad_container".equals(n)||"dialpad_search_list_view".equals(n)||"toggle_container".equals(n)||"input_number_container".equals(n);}
  private static final WeakHashMap<View,Drawable> surfaces=new WeakHashMap<>();
  private static void black(View v){if(!blackSurface(v)||!inDialpad(v))return;if(dark(v)){if(!surfaces.containsKey(v))surfaces.put(v,v.getBackground());if(!(v.getBackground() instanceof android.graphics.drawable.ColorDrawable)||((android.graphics.drawable.ColorDrawable)v.getBackground()).getColor()!=Color.BLACK){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundColor(Color.BLACK);v.setPaddingRelative(a,b,c,d);}}else if(surfaces.containsKey(v)){Drawable old=surfaces.remove(v);int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(old);v.setPaddingRelative(a,b,c,d);}}
+ private static boolean isDeleteContainer(View v){return CALL_LAYOUT.equals(v.getClass().getName())&&descendant(v,"delete_button_background_layout")!=null&&descendant(v,"delete_button_image")!=null;}
  private static void installDialpadDetails()throws Exception {
+  // Observe the actual delete touch receiver, never consume or replace its native action.
+  XposedBridge.hookMethod(ViewGroup.class.getDeclaredMethod("dispatchTouchEvent",MotionEvent.class),new XC_MethodHook(){@Override protected void beforeHookedMethod(MethodHookParam p){try{
+   View v=(View)p.thisObject;if(!isDeleteContainer(v))return;
+   View target=descendant(v,"delete_button_background_layout");if(target==null)return;
+   MotionEvent e=(MotionEvent)p.args[0];int a=e.getActionMasked();
+   if(a!=MotionEvent.ACTION_DOWN&&a!=MotionEvent.ACTION_UP&&a!=MotionEvent.ACTION_CANCEL)return;
+   installDelete(target);KeyState s=keys.get(target);if(s==null||s.failed)return;
+   if(a==MotionEvent.ACTION_DOWN){int[] parent=new int[2],child=new int[2];v.getLocationOnScreen(parent);target.getLocationOnScreen(child);
+    float x=e.getX()+parent[0]-child[0],y=e.getY()+parent[1]-child[1];if(x<0||y<0||x>target.getWidth()||y>target.getHeight())return;}
+   s.apply(target);s.skin.press(a==MotionEvent.ACTION_DOWN);
+  }catch(Throwable t){log("delete touch feedback: "+t);}}});
   XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);
    String name=idName(v);if(CALL_LAYOUT.equals(v.getClass().getName())||"delete_button_image".equals(name)||"delete_button_background_layout".equals(name)){View root=deleteRoot(v);if(root!=null)root.post(()->{try{installDelete(root);}catch(Throwable e){log("delete root: "+e);}});}}catch(Throwable t){log("dialpad detail: "+t);}}});
   XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v)))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
@@ -85,29 +106,52 @@ public final class Hooks implements IXposedHookLoadPackage {
   Drawable stock;ColorStateList stockTint;boolean failed,reported,captured;
   float baseX=1,baseY=1;
   View innerDelete; Drawable innerStock; boolean innerCaptured;
-  final WeakHashMap<TextView,Float> labelOffsets=new WeakHashMap<>();
+  final WeakHashMap<View,Float> labelOffsets=new WeakHashMap<>(),labelY=new WeakHashMap<>();
   final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
   final WeakHashMap<ImageView,ColorStateList> icons=new WeakHashMap<>();
   final ArgbEvaluator evaluator=new ArgbEvaluator();
   KeyState(View v){view=new WeakReference<>(v);skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintFrame;}
-  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if(s.matches("[0-9*#＊＃]")&&!labels.containsKey(t))labels.put(t,t.getTextColors());}
+  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if((s.matches("[0-9*#＊＃]")||"dialpad_key_number".equals(idName(t)))&&!labels.containsKey(t))labels.put(t,t.getTextColors());}
    if(skin.erase&&v instanceof ImageView&&("delete_button_image".equals(idName(v))||v==view.get())){ImageView i=(ImageView)v;if(!icons.containsKey(i))icons.put(i,i.getImageTintList());}
    if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
   void paintFrame(){View v=view.get();if(v==null||!captured)return;
    // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
-   float width=Math.max(1,Math.min(v.getWidth(),v.getHeight()));
-   float scale=1-Visuals.clamp(3.5f*dp(v)/width,0,.11f)*skin.recoil;
-   if(Math.abs(v.getScaleX()-baseX*scale)>.0001f)v.setScaleX(baseX*scale);if(Math.abs(v.getScaleY()-baseY*scale)>.0001f)v.setScaleY(baseY*scale);
+   // The drawable performs recoil; keep the touch receiver and its clipping bounds fixed.
+   if(Math.abs(v.getScaleX()-baseX)>.001f)v.setScaleX(baseX);
+   if(Math.abs(v.getScaleY()-baseY)>.001f)v.setScaleY(baseY);
    for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;int from=skin.dark?0xfffcfcff:0xff3a3a3d,to=(skin.dark?0xff99ded2:0xff41c19f);
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
    if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
   }
-  void alignLabels(View root){/* Native number and letter stack is preserved as a unit. */}
+  boolean isLetters(View v){String n=idName(v);return n.equals("dialpad_key_letters_container")||n.equals("dialpad_key_letters")||n.endsWith("_letters_layout")||n.endsWith("_letter_text_view")||n.equals("dialpad_key_sub_letters")||n.endsWith("_sub_letter");}
+  void alignLabels(View root){
+   if(skin.erase||root.getWidth()<=0||root.getHeight()<=0||!(root instanceof ViewGroup))return;
+   // Only the verified vertical layout: do not turn landscape's horizontal labels into a vertical stack.
+   View letters=descendant(root,"dialpad_key_letters_container");
+   if(letters!=null&&letters.isShown())return;
+   ArrayList<View> stack=new ArrayList<>();ViewGroup g=(ViewGroup)root;
+   for(int i=0;i<g.getChildCount();i++){View child=g.getChildAt(i);if(child.getVisibility()!=View.VISIBLE||child.getWidth()<=0||child.getHeight()<=0)continue;
+    boolean primary=labels.containsKey(child);boolean secondary=isLetters(child);
+    if(!secondary&&child instanceof TextView){CharSequence cs=((TextView)child).getText();secondary=cs!=null&&cs.length()>0&&!primary;}
+    if(primary||secondary||child instanceof ImageView)stack.add(child);
+   }
+   if(stack.isEmpty())return;
+   float top=Float.MAX_VALUE,bottom=-Float.MAX_VALUE;
+   for(View child:stack){if(!labelOffsets.containsKey(child)){labelOffsets.put(child,child.getTranslationX());labelY.put(child,child.getTranslationY());}
+    float oy=labelY.get(child);top=Math.min(top,child.getTop()+oy);bottom=Math.max(bottom,child.getBottom()+oy);}
+   float dy=root.getHeight()*.5f-(top+bottom)*.5f;
+   if(Math.abs(dy)>12*dp(root))dy=0;
+   for(View child:stack){float ox=labelOffsets.get(child),oy=labelY.get(child);float dx=root.getWidth()*.5f-(child.getLeft()+child.getWidth()*.5f+ox);
+    if(Math.abs(dx)>12*dp(root))dx=0;
+    if(Math.abs(child.getTranslationX()-(ox+dx))>.01f)child.setTranslationX(ox+dx);
+    if(Math.abs(child.getTranslationY()-(oy+dy))>.01f)child.setTranslationY(oy+dy);
+   }
+  }
   void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);
    
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log(skin.erase?"calculator red delete feedback active":"calculator recoil keypad v3 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();for(TextView t:new ArrayList<>(labelOffsets.keySet()))if(t!=null)t.setTranslationX(labelOffsets.get(t));labelOffsets.clear();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}if(captured){v.setScaleX(baseX);v.setScaleY(baseY);}captured=false;}
+  void restore(View v){skin.stop();for(View t:new ArrayList<>(labelOffsets.keySet()))if(t!=null){t.setTranslationX(labelOffsets.get(t));if(labelY.containsKey(t))t.setTranslationY(labelY.get(t));}labelOffsets.clear();labelY.clear();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}if(captured){v.setScaleX(baseX);v.setScaleY(baseY);}captured=false;}
   @Override public void onViewAttachedToWindow(View v){apply(v);if(!skin.erase)v.post(()->{if(v.isAttachedToWindow())alignGrid(v);});}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);if(!skin.erase)alignGrid(v);}

@@ -48,16 +48,18 @@ final class Visuals {
    int first=erase?0xfffce0ff:0xffc7f9b3,end=erase?0xffffc8c8:0xff99ded2;
    Paint q=new Paint(Paint.ANTI_ALIAS_FLAG);
    q.setShader(new LinearGradient(0,0,size,size,new int[]{first,end},null,Shader.TileMode.CLAMP));
-   c.drawCircle(center,center,center,q);
+   c.drawRect(0,0,size,size,q);
    float edge=Math.min(.91f,radius/center);
    q.setShader(new RadialGradient(center,center,center,new int[]{0x08000000,0x14000000,0x35000000,0x79000000,0x43000000,0x00000000},
     Geometry.haloStops(edge),Shader.TileMode.CLAMP));
-   q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawCircle(center,center,center,q);
+   q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawRect(0,0,size,size,q);
   }
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
    float radius=Math.min(Geometry.radius(b.width(),b.height(),dp),commonRadius>0?commonRadius:36*dp);
+   if(radius<1)return;
+   int checkpoint=c.save();float scale=1f-.075f*clamp(recoil,-.20f,1f);c.scale(scale,scale,x,y);
    int base=dark?0xff171717:0xfffcfcff;
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
@@ -71,7 +73,7 @@ final class Visuals {
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
     c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
    }
-   p.setAlpha(255);
+   p.setAlpha(255);c.restoreToCount(checkpoint);
   }
  }
  static final class Tabs extends Skin {

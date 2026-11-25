@@ -24,3 +24,6 @@ Retains v0.5 dark AMOLED theme; re-enables experimental keypad and slider. Same 
 
 ## v0.7 — source audit
 Keep native digit/letter stack intact, shared radius across keys, avoid repeated spring restart during layout, bound gradient stops, handle interrupted gestures, restrict red feedback to delete background instead of entire call layout, avoid duplicate native tab selection. Added pure-Java geometry regression checks to CI; these are not Android UI tests. Release publish retries and Actions artifact fallback. Device testing remains necessary.
+
+## v0.8
+Recording-based changes: keep touch receiver fixed while animating key drawable recoil; square bitmap alpha-mask pass with ordered gradient stops; center native vertical number/letter stacks while leaving horizontal layout unchanged; observe native backspace touch without intercepting its action; animate newly appended digit from right in verified EllipsisEditText using temporary drawing span, without altering dialed text. Text-entry effect recreates the calculator's animateInFromRight behavior, not its proprietary renderer. Test single taps, long holds, fast entry, cursor insertion and backspace. Runtime and all orientations remain unverified.
