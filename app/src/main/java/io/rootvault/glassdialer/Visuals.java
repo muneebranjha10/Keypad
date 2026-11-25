@@ -37,7 +37,7 @@ final class Visuals {
    else {anim=ValueAnimator.ofFloat(start,0f);anim.setDuration(350);}
    anim.setInterpolator(down?new PathInterpolator(.22f,0f,.25f,1f):new PathInterpolator(.18f,.55f,.24f,1f));
    anim.addUpdateListener(a->{glow=(float)a.getAnimatedValue();change();});anim.start();
-   motion=ValueAnimator.ofFloat(recoil,down?1f:0f);motion.setDuration(down?100:350);
+   motion=down?ValueAnimator.ofFloat(recoil,1f):(recoil<.35f?ValueAnimator.ofFloat(Math.max(.25f,recoil),.75f,0f):ValueAnimator.ofFloat(recoil,0f));motion.setDuration(down?100:350);
    motion.setInterpolator(down?new PathInterpolator(.25f,0f,.25f,1f):new PathInterpolator(.18f,.86f,.24f,1.24f));
    motion.addUpdateListener(a->{recoil=(float)a.getAnimatedValue();change();});motion.start();
   }
@@ -51,7 +51,7 @@ final class Visuals {
    q.setShader(new LinearGradient(0,0,size,size,new int[]{first,end},null,Shader.TileMode.CLAMP));
    c.drawRect(0,0,size,size,q);
    float edge=Math.min(.91f,radius/center);
-   q.setShader(new RadialGradient(center,center,center,new int[]{0x08000000,0x14000000,0x35000000,0x79000000,0x43000000,0x00000000},
+   q.setShader(new RadialGradient(center,center,center,new int[]{0x08000000,0x18000000,0x39000000,0x8c000000,0x47000000,0x00000000},
     Geometry.haloStops(edge),Shader.TileMode.CLAMP));
    q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawRect(0,0,size,size,q);
   }

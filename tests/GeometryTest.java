@@ -19,9 +19,11 @@ public final class GeometryTest {
   close(Geometry.fitLeft(-20,100,0,300),0);close(Geometry.fitLeft(350,100,0,300),200);close(Geometry.fitLeft(150,100,0,300),100);
   close(Geometry.centerShift(10,70,100,20),10);close(Geometry.centerShift(0,120,100,20),0);close(Geometry.centerShift(10,90,100,20),0);
   for(int w=8;w<=240;w+=4)for(int h=8;h<=180;h+=4){float a=Math.min(w,h),r=Geometry.safeRadius(w,h,2);check(r>=0&&r<=a/2.04f,"safe radius");}
-  for(int i=-20;i<=100;i++){float sc=Geometry.recoilScale(i/100f);check(sc>=.924f&&sc<=1.016f,"bounded recoil");}
+  for(int i=-20;i<=100;i++){float sc=Geometry.recoilScale(i/100f);check(sc>=.869f&&sc<=1.018f,"bounded recoil");}
   check(Geometry.hit(20,20,40,40,0),"delete inside");check(!Geometry.hit(-1,20,40,40,0),"delete outside");check(Geometry.hit(-1,20,40,40,4),"touch slop");check(!Geometry.hit(Float.NaN,20,40,40,4),"invalid pointer");check(!Geometry.hit(0,0,0,0,4),"unlaid out target");
   for(int w=10;w<=500;w+=10)for(int x=-50;x<=550;x+=10){float fitted=Geometry.fitLeft(x,w,0,500);check(fitted>=0&&fitted+w<=500.001f,"capsule bounds");}
+  check(Geometry.dialCount("1234 567")==7,"formatted number");check(Geometry.dialCount("+1 (234)")==5,"formatted international");check(Geometry.dialCount("12#*")==4,"dial symbols");check(Geometry.dialCount("")==0,"empty input");check(Geometry.dialCount("١٢٣")==3,"localized digits");
+  close(Geometry.recoilScale(1),.87f);close(Geometry.recoilScale(0),1);
   System.out.println("Geometry checks passed: "+count);
  }
 }

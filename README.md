@@ -33,3 +33,6 @@ Latest-edit generation guard prevents stale number-entry animation; release anim
 
 ## v1.0 beta
 Avoid span changes during beforeTextChanged; clear on latest edit; respect native animation disable setting; preserve disabled/stateful digit colors; track delete pointer and slop; consume cancelled tab gesture through its end; cap glow bitmap allocations; constrain narrow slider insets. Pure Java regression checks are not a substitute for Android runtime tests. Device behavior, native hooks on firmware variants, and 120 Hz remain unverified.
+
+## v1.1 — visible motion
+Based on the recorded comparison showing lit keys but missing number-line motion: replace span-based entry animation with draw-only native number-line slide/fade, triggered by an added dial character even when formatting adds spaces. Does not move a single digit independently. Apply synchronized visual recoil to key labels and background with 13% compression, retain short-tap rebound and preserve touch geometry. Respect Android animation settings. Runtime effect and actual frame rate still unverified.

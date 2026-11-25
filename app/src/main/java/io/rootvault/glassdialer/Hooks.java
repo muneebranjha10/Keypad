@@ -13,6 +13,8 @@ import android.widget.HorizontalScrollView;
 import android.widget.TextView;
 import android.widget.EditText;
 import android.graphics.Rect;
+import android.graphics.Canvas;
+import java.util.IdentityHashMap;
 import android.widget.ImageView;
 import android.animation.ArgbEvaluator;
 import java.lang.ref.WeakReference;
@@ -54,15 +56,28 @@ public final class Hooks implements IXposedHookLoadPackage {
  private static final WeakHashMap<View,Boolean> entryViews=new WeakHashMap<>();
  private static void installEntry(ClassLoader l)throws Exception {
   Class<?> c=find(PKG+".dialpad.view.widget.EllipsisEditText",l);
-  if(c==null||!EditText.class.isAssignableFrom(c))return;
-  XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{EditText e=(EditText)p.thisObject;if(entryViews.containsKey(e))return;entryViews.put(e,true);EntryMotion.attach(e);}catch(Throwable t){log("entry init: "+t);}}});
+  if(c==null||!EditText.class.isAssignableFrom(c)){log("entry class missing; attachment fallback enabled");return;}
+  XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{attachEntry((EditText)p.thisObject);}catch(Throwable t){log("entry init: "+t);}}});
+ }
+ private static void attachEntry(EditText e){if(entryViews.containsKey(e))return;EntryMotion.attach(e);entryViews.put(e,true);log("native number-line animation attached");}
+ private static Method drawMethod(Class<?> c)throws Exception {
+  for(Class<?> type=c;type!=null;type=type.getSuperclass()){try{return declared(type,"dispatchDraw",Canvas.class);}catch(NoSuchMethodException ignored){}}
+  throw new NoSuchMethodException("dispatchDraw");
+ }
+ private static void installLabelRecoil(Class<?> c)throws Exception {
+  final ThreadLocal<IdentityHashMap<XC_MethodHook.MethodHookParam,Integer>> frames=new ThreadLocal<>();
+  XposedBridge.hookMethod(drawMethod(c),new XC_MethodHook(){
+   @Override protected void beforeHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null||s.skin.erase||s.failed||!s.captured||v.getBackground()!=s.wrapper)return;float scale=Geometry.recoilScale(s.skin.recoil);if(Math.abs(scale-1)<.001f)return;Canvas canvas=(Canvas)p.args[0];IdentityHashMap<XC_MethodHook.MethodHookParam,Integer> map=frames.get();if(map==null){map=new IdentityHashMap<>();frames.set(map);}int saved=canvas.save();map.put(p,saved);canvas.scale(scale,scale,v.getWidth()*.5f,v.getHeight()*.5f);}catch(Throwable t){log("label recoil: "+t);}}
+   @Override protected void afterHookedMethod(MethodHookParam p){IdentityHashMap<XC_MethodHook.MethodHookParam,Integer> map=frames.get();if(map==null)return;Integer saved=map.remove(p);if(map.isEmpty())frames.remove();if(saved!=null)try{((Canvas)p.args[0]).restoreToCount(saved);}catch(Throwable ignored){}}
+  });
  }
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
+  try{installLabelRecoil(c);}catch(Throwable t){log("label recoil unavailable: "+t);}
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
   final java.lang.reflect.Field stockAnimation=nativeAnimator;
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
-  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null)try{Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning())((android.animation.ValueAnimator)a).cancel();}catch(Throwable ignored){}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
+  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null)try{Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning()){((android.animation.ValueAnimator)a).cancel();v.setScaleX(s.baseX);v.setScaleY(s.baseY);}}catch(Throwable ignored){}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
  }
  private static String idName(View v){int id=v.getId();if(id==View.NO_ID)return "";try{return v.getResources().getResourceEntryName(id);}catch(Throwable t){return "";}}
  private static boolean inDialpad(View v){View x=v;while(x!=null){if("keypad_fragment".equals(idName(x)))return true;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;}
@@ -94,7 +109,7 @@ public final class Hooks implements IXposedHookLoadPackage {
     boolean hit=Geometry.hit(e.getX(i)+parent[0]-child[0],e.getY(i)+parent[1]-child[1],target.getWidth(),target.getHeight(),slop);
     if(!hit&&icon!=null&&icon.isShown()){icon.getLocationOnScreen(child);hit=Geometry.hit(e.getX(i)+parent[0]-child[0],e.getY(i)+parent[1]-child[1],icon.getWidth(),icon.getHeight(),slop);}s.skin.press(hit);}
   }catch(Throwable t){log("delete touch feedback: "+t);}}});
-  XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);if(v instanceof EditText&&v.getClass().getSimpleName().equals("EllipsisEditText")&&v.getClass().getName().startsWith(PKG+"."))attachEntry((EditText)v);
    String name=idName(v);if(CALL_LAYOUT.equals(v.getClass().getName())||"delete_button_image".equals(name)||"delete_button_background_layout".equals(name)){View root=deleteRoot(v);if(root!=null)root.post(()->{try{installDelete(root);}catch(Throwable e){log("delete root: "+e);}});}}catch(Throwable t){log("dialpad detail: "+t);}}});
   XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v))||CALL_LAYOUT.equals(v.getClass().getName()))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()&&!s.deleteTracking){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
  }
@@ -123,7 +138,8 @@ public final class Hooks implements IXposedHookLoadPackage {
   void paintFrame(){View v=view.get();if(v==null||!captured)return;
    // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
    // The drawable performs recoil; keep the touch receiver and its clipping bounds fixed.
-   // Never write native View scale each frame: recoil is local to our drawable.
+   // Invalidate the full view to refresh the matching child draw transform. Hit bounds stay fixed.
+   v.postInvalidateOnAnimation();
    for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;ColorStateList original=labels.get(t);if(original==null)continue;if(skin.glow<=.002f||!t.isEnabled()){if(t.getTextColors()!=original)t.setTextColor(original);continue;}int from=original.getColorForState(t.getDrawableState(),original.getDefaultColor()),to=skin.dark?0xff99ded2:0xff41c19f;
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
    if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;ColorStateList original=icons.get(i);if(!i.isEnabled()||!i.isShown()){if(i.getImageTintList()!=original)i.setImageTintList(original);continue;}int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
