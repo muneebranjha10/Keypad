@@ -31,6 +31,7 @@ public final class GeometryTest {
   check(Geometry.insertedOrdinal("12","34")==-1,"replace");
   check(Geometry.dialIndex("9,898",1)==2,"formatted glyph index");
   close(Geometry.entryEase(0),0);close(Geometry.entryEase(1),1);
+  float last=0;for(int n=0;n<=100;n++){float q=Geometry.entryEase(n/100f);check(q>=last&&q<=1,"smooth monotonic entry");last=q;}
   System.out.println("Geometry checks passed: "+count);
  }
 }

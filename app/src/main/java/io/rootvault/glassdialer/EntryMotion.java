@@ -2,6 +2,7 @@ package io.rootvault.glassdialer;
 import android.animation.ValueAnimator;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.text.TextPaint;
 import android.graphics.RectF;
 import android.os.SystemClock;
 import android.text.Editable;
@@ -16,14 +17,15 @@ import java.util.IdentityHashMap;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 
-/** Animate only the newly inserted glyphs, using the native Layout; never change text, spans or selection. */
+/** Animate only the newly inserted glyphs, using native Layout positions and direct glyph drawing; never change text, spans or selection. */
 final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener {
  private static final WeakHashMap<EditText,WeakReference<EntryMotion>> instances=new WeakHashMap<>();
  private static final ThreadLocal<IdentityHashMap<XC_MethodHook.MethodHookParam,Frame>> frames=new ThreadLocal<>();
  private final EditText editor;
  private String previous="";
  private final ArrayList<Motion> active=new ArrayList<>();
- private static final long DURATION=260;
+ private static final long DURATION=210;
+ private final TextPaint glyphPaint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
  private EntryMotion(EditText v){editor=v;v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
  static void attach(EditText v){if(instances.containsKey(v))return;EntryMotion m=new EntryMotion(v);instances.put(v,new WeakReference<>(m));}
  static void install()throws Exception {
@@ -55,7 +57,8 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
   if(active.isEmpty())return null;
   if(!ValueAnimator.areAnimatorsEnabled()){active.clear();return null;}
   long time=SystemClock.uptimeMillis();CharSequence text=editor.getText();Layout layout=editor.getLayout();
-  if(layout==null||text==null||layout.getText().length()!=text.length()||layout.getLineCount()==0){active.clear();return null;}
+  if(layout==null||text==null||layout.getText().length()!=text.length()||layout.getLineCount()==0){if(time-active.get(active.size()-1).start<DURATION)editor.postInvalidateOnAnimation();else active.clear();return null;}
+  glyphPaint.set(editor.getPaint());glyphPaint.setColor(editor.getCurrentTextColor());glyphPaint.setTextAlign(Paint.Align.LEFT);
   ArrayList<Glyph> glyphs=new ArrayList<>();
   float px=editor.getCompoundPaddingLeft(),py=editor.getTotalPaddingTop(),dp=editor.getResources().getDisplayMetrics().density;
   for(int i=active.size()-1;i>=0;i--){
@@ -70,27 +73,30 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
    float q=Geometry.entryEase(Math.max(0,f));
    // Layout's actual glyph cell: preserve other digits and cursor at their native positions.
    RectF box=new RectF(px+l,py+layout.getLineTop(line),px+r,py+layout.getLineBottom(line));
-   glyphs.add(new Glyph(box,Math.min(14*dp,(r-l)*.75f)*(1-q),Math.round(255*(.28f+.72f*q))));
+   glyphs.add(new Glyph(box,text.charAt(index),px+l,py+layout.getLineBaseline(line),Math.min(7*dp,(r-l)*.36f)*(1-q),Math.round(glyphPaint.getAlpha()*(.38f+.62f*q))));
   }
   if(!active.isEmpty())editor.postInvalidateOnAnimation();
   if(glyphs.isEmpty())return null;
   int save=c.save();
-  try{for(Glyph g:glyphs)c.clipOutRect(g.box);return new Frame(save,layout,px,py,glyphs);}
+  try{for(Glyph g:glyphs)c.clipOutRect(g.box);return new Frame(save,glyphPaint,glyphs);}
   catch(Throwable t){c.restoreToCount(save);return null;}
  }
  private static final class Motion {int ordinal;final char digit;final long start;Motion(int o,char d,long s){ordinal=o;digit=d;start=s;}}
- private static final class Glyph {final RectF box;final float dx;final int alpha;Glyph(RectF b,float d,int a){box=b;dx=d;alpha=a;}}
+ private static final class Glyph {
+  final RectF box;final char[] digit;final float x,y,dx;final int alpha;
+  Glyph(RectF b,char d,float x,float y,float dx,int a){box=b;digit=new char[]{d};this.x=x;this.y=y;this.dx=dx;alpha=a;}
+ }
  private static final class Frame {
-  final int save;final Layout layout;final float x,y;final ArrayList<Glyph> glyphs;
-  Frame(int s,Layout l,float x,float y,ArrayList<Glyph> g){save=s;layout=l;this.x=x;this.y=y;glyphs=g;}
+  final int save;final TextPaint paint;final ArrayList<Glyph> glyphs;
+  Frame(int s,TextPaint p,ArrayList<Glyph> g){save=s;paint=p;glyphs=g;}
   void finish(Canvas c){
-   c.restoreToCount(save);
-   for(Glyph g:glyphs){int s=c.save();try{
-    // Keep moving glyph inside its own cell to avoid painting over a neighboring digit.
-    c.clipRect(g.box);int layer=c.saveLayerAlpha(g.box,g.alpha);
-    try{c.translate(x+g.dx,y);c.clipRect(g.box.left-x,g.box.top-y,g.box.right-x,g.box.bottom-y);layout.draw(c);}
-    finally{c.restoreToCount(layer);}
-   }finally{c.restoreToCount(s);}}
+   c.restoreToCount(save);int original=paint.getAlpha();
+   try{for(Glyph g:glyphs){int s=c.save();try{
+     c.clipRect(g.box);paint.setAlpha(g.alpha);
+     c.drawText(g.digit,0,1,g.x+g.dx,g.y,paint);
+    }finally{c.restoreToCount(s);}}}
+   finally{paint.setAlpha(original);}
   }
  }
+
 }

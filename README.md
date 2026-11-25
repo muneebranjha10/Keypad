@@ -39,3 +39,6 @@ Based on the recorded comparison showing lit keys but missing number-line motion
 
 ## v1.2
 Clean number-only keypad: hide secondary text and known auxiliary icons visually; preserve native long-press actions and accessibility semantics. Center the primary digit using its layout/ink metrics. Per-glyph entry animation uses a clipped native Layout redraw, independent of cursor selection and formatting separators; existing digits retain their layout. Restore native backspace idle tint and serialize touch/press feedback. No real-device verification; custom animation is a recreation, not a proprietary calculator port. Test RTL, ellipsis, large text and backspace on device.
+
+## v1.3
+Remove custom slider and all custom tab gesture hooks. Native Samsung tabs restored. Backspace uses native shape and stateful red icon tint plus red native ripple when present; no custom recoil, circle or glow animator. Individual digit entry uses direct glyph drawing at native layout position with smoothstep timing, no per-glyph saveLayer or Layout.draw. Native formatting, selection and number text remain unmodified. Actual smoothness and stock delete behavior require device verification.
