@@ -10,6 +10,8 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
+import android.widget.TextView;
+import android.animation.ArgbEvaluator;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -46,10 +48,14 @@ public final class Hooks implements IXposedHookLoadPackage {
   XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("key press: "+t);}}});
  }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
-  final Visuals.Key skin; final RippleDrawable wrapper; Drawable stock; boolean failed,reported;
-  KeyState(View v){skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);}
-  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));if(v.getBackground()!=wrapper){stock=v.getBackground();int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator key material active");}}}catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();if(v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setPaddingRelative(a,b,c,d);}}
+  final Visuals.Key skin; final RippleDrawable wrapper; Drawable stock; ColorStateList stockTint; boolean failed,reported,captured;
+  final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
+  final ArgbEvaluator evaluator=new ArgbEvaluator();
+  KeyState(View v){skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintLabels;}
+  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if(s.matches("[0-9*#＊＃]")&&!labels.containsKey(t))labels.put(t,t.getTextColors());}if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
+  void paintLabels(){for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;ColorStateList base=labels.get(t);if(base==null)continue;if(skin.glow<=.001f){if(t.getTextColors()!=base)t.setTextColor(base);}else {int a=base.getDefaultColor(),b=skin.dark?0xff63d7ca:0xff087c70;int c=(int)evaluator.evaluate(skin.glow,a,b);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}}}
+  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator key material v2 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);paintLabels();}catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
+  void restore(View v){skin.stop();labels.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;}
   @Override public void onViewAttachedToWindow(View v){apply(v);}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);}
@@ -113,6 +119,6 @@ public final class Hooks implements IXposedHookLoadPackage {
   }
   @Override public void onViewAttachedToWindow(View v){v.post(()->safeSync(false));}
   @Override public void onViewDetachedFromWindow(View v){restore();}
-  @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){safeSync(false);}
+  @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){safeSync(active);}
  }
 }
