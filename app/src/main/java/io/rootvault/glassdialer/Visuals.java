@@ -28,7 +28,7 @@ final class Visuals {
   void erase(boolean e){if(erase!=e){erase=e;halo=null;invalidateSelf();}}
   void change(){invalidateSelf();if(frame!=null)frame.run();}
   void press(boolean down){if(pressed==down)return;pressed=down;
-   if(anim!=null)anim.cancel();if(motion!=null)motion.cancel();
+   if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}
    float start=glow;
    // Keep very short taps visible, even if released before the next display frame.
    if(down){anim=ValueAnimator.ofFloat(start,1f);anim.setDuration(100);}
@@ -40,7 +40,7 @@ final class Visuals {
    motion.setInterpolator(down?new PathInterpolator(.25f,0f,.25f,1f):new PathInterpolator(.18f,.86f,.24f,1.24f));
    motion.addUpdateListener(a->{recoil=(float)a.getAnimatedValue();change();});motion.start();
   }
-  void stop(){if(anim!=null)anim.cancel();if(motion!=null)motion.cancel();anim=motion=null;pressed=false;glow=recoil=0;halo=null;change();}
+  void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}anim=motion=null;pressed=false;glow=recoil=0;halo=null;change();}
   void prepareHalo(int size,float radius){
    if(halo!=null&&haloSize==size&&Math.abs(haloRadius-radius)<.5f)return;
    haloSize=size;haloRadius=radius;halo=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
@@ -57,9 +57,9 @@ final class Visuals {
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
-   float radius=Math.min(Geometry.radius(b.width(),b.height(),dp),commonRadius>0?commonRadius:36*dp);
+   float radius=Math.min(Geometry.safeRadius(b.width(),b.height(),dp),commonRadius>0?commonRadius:36*dp);
    if(radius<1)return;
-   int checkpoint=c.save();float scale=1f-.075f*clamp(recoil,-.20f,1f);c.scale(scale,scale,x,y);
+   int checkpoint=c.save();float scale=Geometry.recoilScale(recoil);c.scale(scale,scale,x,y);
    int base=dark?0xff171717:0xfffcfcff;
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
@@ -68,7 +68,7 @@ final class Visuals {
     p.setColor(Color.WHITE);p.setShader(new RadialGradient(x,y,radius,new int[]{0x00000000,0x00000000,0x31000000,0x61000000},new float[]{0,.58f,.90f,1},Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
    }
    if(glow>.002f){
-    int size=Math.max(8,(int)Math.min(available,2*(radius+8*dp)));
+    int size=Math.max(8,(int)Math.floor(Math.min(available/1.02f,2*(radius+6*dp))));
     prepareHalo(size,radius);
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
     c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
@@ -90,14 +90,14 @@ final class Visuals {
    anim.addUpdateListener(v->{float f=(float)v.getAnimatedValue();float t=Geometry.spring(f);left=a+(l-a)*t;right=b+(r-b)*t;stretch=(float)Math.sin(Math.PI*f)*Math.min(2.5f*dp,Math.abs(l-a)*.045f);invalidateSelf();});anim.start();
   }
   void drag(float l,float r){if(anim!=null)anim.cancel();left=l;right=r;targetL=l;targetR=r;lift=1;stretch=1.3f*dp;invalidateSelf();}
-  void stop(){if(anim!=null)anim.cancel();lift=stretch=0;left=right=Float.NaN;invalidateSelf();}
+  void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}lift=stretch=0;left=right=Float.NaN;invalidateSelf();}
   @Override public void draw(Canvas c){
    Rect b=getBounds();if(b.width()<4||b.height()<4)return;
-   float inset=.75f*dp;r.set(b.left+inset,b.top+inset,b.right-inset,b.bottom-inset);float rad=r.height()/2;
+   float inset=Math.min(.75f*dp,Math.min(b.width(),b.height())*.1f);r.set(b.left+inset,b.top+inset,b.right-inset,b.bottom-inset);float rad=r.height()/2;
    shade(c,r,rad,new LinearGradient(0,r.top,0,r.bottom,dark?new int[]{0xff1d1d1d,0xff171717,0xff1b1b1b}:new int[]{0xfffafbfc,0xffe4e7ec,0xfff1f3f6},new float[]{0,.53f,1},Shader.TileMode.CLAMP));
    stroke(c,r,rad,new LinearGradient(r.left,r.top,r.right,r.bottom,dark?new int[]{0x21ffffff,0x08ffffff,0x17ffffff}:new int[]{0xffffffff,0x40828b96,0xaaffffff},new float[]{0,.50f,1},Shader.TileMode.CLAMP),.85f*dp);
    if(!Float.isFinite(left)||right<=left)return;
-   float pad=3*dp;t.set(Math.max(r.left+pad,b.left+left+pad-stretch),r.top+pad-(lift*.45f*dp),Math.min(r.right-pad,b.left+right-pad+stretch),r.bottom-pad+(lift*.45f*dp));if(t.width()<2||t.height()<2)return;float tr=Math.min(t.width(),t.height())*.5f;
+   float pad=Math.min(3*dp,r.height()*.12f);float min=r.left+pad,max=r.right-pad;float width=Math.min(max-min,Math.max(0,right-left-2*pad+2*stretch));float center=b.left+(left+right)*.5f;float fitted=Geometry.fitLeft(center,width,min,max);t.set(fitted,r.top+pad-(lift*.45f*dp),fitted+width,r.bottom-pad+(lift*.45f*dp));if(t.width()<2||t.height()<2)return;float tr=Math.min(t.width(),t.height())*.5f;
    shade(c,t,tr,new LinearGradient(0,t.top,0,t.bottom,dark?new int[]{0xff494949,0xff353535,0xff303030,0xff363636}:new int[]{0xfffefefe,0xffe0e4e8,0xffd0d5dc,0xfff7f8fa},new float[]{0,.36f,.72f,1},Shader.TileMode.CLAMP));
    shade(c,t,tr,new RadialGradient(t.left+t.width()*.18f,t.top,t.width()*.75f,new int[]{0x22ffffff,0x00ffffff},null,Shader.TileMode.CLAMP));
    stroke(c,t,tr,new LinearGradient(t.left,t.top,t.right,t.bottom,new int[]{0x58ffffff,0x12ffffff,0x24ffffff},new float[]{0,.51f,1},Shader.TileMode.CLAMP),1.1f*dp);

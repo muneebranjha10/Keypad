@@ -62,14 +62,15 @@ public final class Hooks implements IXposedHookLoadPackage {
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
   final java.lang.reflect.Field stockAnimation=nativeAnimator;
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
-  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null){Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning())((android.animation.ValueAnimator)a).cancel();}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
+  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null)try{Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning())((android.animation.ValueAnimator)a).cancel();}catch(Throwable ignored){}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
  }
  private static String idName(View v){int id=v.getId();if(id==View.NO_ID)return "";try{return v.getResources().getResourceEntryName(id);}catch(Throwable t){return "";}}
  private static boolean inDialpad(View v){View x=v;while(x!=null){if("keypad_fragment".equals(idName(x)))return true;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;}
  private static final String CALL_LAYOUT=PKG+".dialpad.view.widget.DialpadCallButtonLayout";
  private static View descendant(View root,String name){if(name.equals(idName(root)))return root;if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){View found=descendant(g.getChildAt(i),name);if(found!=null)return found;}}return null;}
  private static boolean eraseKey(View v){String name=idName(v);return ("dialpad_delete_button".equals(name)||"dialpad_widget_key_delete_button_china".equals(name))&&inDialpad(v);}
- private static View deleteRoot(View v){View x=v;for(int i=0;i<4&&x!=null;i++){if(CALL_LAYOUT.equals(x.getClass().getName())&&descendant(x,"delete_button_image")!=null){View bg=descendant(x,"delete_button_background_layout");if(bg!=null)return bg;}android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return null;}
+ private static View deleteHost(View v){View x=v;for(int i=0;i<8&&x!=null;i++){if(CALL_LAYOUT.equals(x.getClass().getName())&&descendant(x,"delete_button_image")!=null&&descendant(x,"delete_button_background_layout")!=null)return x;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return null;}
+ private static View deleteRoot(View v){View host=deleteHost(v);return host==null?null:descendant(host,"delete_button_background_layout");}
  private static void installDelete(View v){if(v==null||!v.isAttachedToWindow())return;KeyState s=keys.get(v);if(s==null){s=new KeyState(v);s.skin.erase(true);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);}s.apply(v);}
 
  private static boolean blackSurface(View v){String n=idName(v);return "keypad_fragment".equals(n)||"keypad_view".equals(n)||"dialpad_container".equals(n)||"dialpad_search_list_view".equals(n)||"toggle_container".equals(n)||"input_number_container".equals(n);}
@@ -90,15 +91,15 @@ public final class Hooks implements IXposedHookLoadPackage {
   }catch(Throwable t){log("delete touch feedback: "+t);}}});
   XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);
    String name=idName(v);if(CALL_LAYOUT.equals(v.getClass().getName())||"delete_button_image".equals(name)||"delete_button_background_layout".equals(name)){View root=deleteRoot(v);if(root!=null)root.post(()->{try{installDelete(root);}catch(Throwable e){log("delete root: "+e);}});}}catch(Throwable t){log("dialpad detail: "+t);}}});
-  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v)))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v))||CALL_LAYOUT.equals(v.getClass().getName()))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
  }
  private static boolean sameGrid(View a,View b){
   View x=a;for(int i=0;i<5&&x!=null;i++){View y=b;for(int j=0;j<5&&y!=null;j++){if(x==y&&x!=a&&x!=b)return true;android.view.ViewParent p=y.getParent();y=p instanceof View?(View)p:null;}android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;
  }
  private static void alignGrid(View source){
   if(!source.isAttachedToWindow()||source.getWidth()<=0||source.getHeight()<=0)return;
-  float radius=Geometry.radius(source.getWidth(),source.getHeight(),dp(source));ArrayList<KeyState> group=new ArrayList<>();
-  for(View v:new ArrayList<>(keys.keySet())){if(v==null||!v.isAttachedToWindow()||!v.isShown()||v.getWidth()<=0||v.getHeight()<=0||!sameGrid(source,v)&&v!=source)continue;KeyState s=keys.get(v);if(s==null||s.skin.erase)continue;group.add(s);radius=Math.min(radius,Geometry.radius(v.getWidth(),v.getHeight(),dp(v)));}
+  float radius=Geometry.safeRadius(source.getWidth(),source.getHeight(),dp(source));ArrayList<KeyState> group=new ArrayList<>();
+  for(View v:new ArrayList<>(keys.keySet())){if(v==null||!v.isAttachedToWindow()||!v.isShown()||v.getWidth()<=0||v.getHeight()<=0||!sameGrid(source,v)&&v!=source)continue;KeyState s=keys.get(v);if(s==null||s.skin.erase)continue;group.add(s);radius=Math.min(radius,Geometry.safeRadius(v.getWidth(),v.getHeight(),dp(v)));}
   for(KeyState s:group)s.skin.radius(radius);
  }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
@@ -117,41 +118,37 @@ public final class Hooks implements IXposedHookLoadPackage {
   void paintFrame(){View v=view.get();if(v==null||!captured)return;
    // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
    // The drawable performs recoil; keep the touch receiver and its clipping bounds fixed.
-   if(Math.abs(v.getScaleX()-baseX)>.001f)v.setScaleX(baseX);
-   if(Math.abs(v.getScaleY()-baseY)>.001f)v.setScaleY(baseY);
+   // Never write native View scale each frame: recoil is local to our drawable.
    for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;int from=skin.dark?0xfffcfcff:0xff3a3a3d,to=(skin.dark?0xff99ded2:0xff41c19f);
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
    if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
   }
-  boolean isLetters(View v){String n=idName(v);return n.equals("dialpad_key_letters_container")||n.equals("dialpad_key_letters")||n.endsWith("_letters_layout")||n.endsWith("_letter_text_view")||n.equals("dialpad_key_sub_letters")||n.endsWith("_sub_letter");}
+  boolean hasLabel(View v){
+   if(v.getVisibility()!=View.VISIBLE)return false;
+   if(v instanceof TextView){CharSequence s=((TextView)v).getText();return s!=null&&s.length()>0;}
+   if(v instanceof ImageView){String n=idName(v);return n.contains("voicemail")||n.contains("letter")||n.contains("symbol");}
+   if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)if(hasLabel(g.getChildAt(i)))return true;}
+   return false;
+  }
+  void resetAlignment(){for(View t:new ArrayList<>(labelOffsets.keySet()))if(t!=null){Float x=labelOffsets.get(t),y=labelY.get(t);if(x!=null)t.setTranslationX(x);if(y!=null)t.setTranslationY(y);}labelOffsets.clear();labelY.clear();}
   void alignLabels(View root){
    if(skin.erase||root.getWidth()<=0||root.getHeight()<=0||!(root instanceof ViewGroup))return;
-   // Only the verified vertical layout: do not turn landscape's horizontal labels into a vertical stack.
-   View letters=descendant(root,"dialpad_key_letters_container");
-   if(letters!=null&&letters.isShown())return;
-   ArrayList<View> stack=new ArrayList<>();ViewGroup g=(ViewGroup)root;
-   for(int i=0;i<g.getChildCount();i++){View child=g.getChildAt(i);if(child.getVisibility()!=View.VISIBLE||child.getWidth()<=0||child.getHeight()<=0)continue;
-    boolean primary=labels.containsKey(child);boolean secondary=isLetters(child);
-    if(!secondary&&child instanceof TextView){CharSequence cs=((TextView)child).getText();secondary=cs!=null&&cs.length()>0&&!primary;}
-    if(primary||secondary||child instanceof ImageView)stack.add(child);
-   }
-   if(stack.isEmpty())return;
-   float top=Float.MAX_VALUE,bottom=-Float.MAX_VALUE;
+   ViewGroup g=(ViewGroup)root;ArrayList<View> stack=new ArrayList<>();
+   for(int i=0;i<g.getChildCount();i++){View child=g.getChildAt(i);if(child.getWidth()>0&&child.getHeight()>0&&hasLabel(child))stack.add(child);}
+   if(stack.isEmpty()){resetAlignment();return;}
+   for(View child:new ArrayList<>(labelOffsets.keySet()))if(child!=null&&!stack.contains(child)){Float x=labelOffsets.remove(child),y=labelY.remove(child);if(x!=null)child.setTranslationX(x);if(y!=null)child.setTranslationY(y);}
+   float left=Float.MAX_VALUE,top=Float.MAX_VALUE,right=-Float.MAX_VALUE,bottom=-Float.MAX_VALUE;
    for(View child:stack){if(!labelOffsets.containsKey(child)){labelOffsets.put(child,child.getTranslationX());labelY.put(child,child.getTranslationY());}
-    float oy=labelY.get(child);top=Math.min(top,child.getTop()+oy);bottom=Math.max(bottom,child.getBottom()+oy);}
-   float dy=root.getHeight()*.5f-(top+bottom)*.5f;
-   if(Math.abs(dy)>12*dp(root))dy=0;
-   for(View child:stack){float ox=labelOffsets.get(child),oy=labelY.get(child);float dx=root.getWidth()*.5f-(child.getLeft()+child.getWidth()*.5f+ox);
-    if(Math.abs(dx)>12*dp(root))dx=0;
-    if(Math.abs(child.getTranslationX()-(ox+dx))>.01f)child.setTranslationX(ox+dx);
-    if(Math.abs(child.getTranslationY()-(oy+dy))>.01f)child.setTranslationY(oy+dy);
-   }
+    float ox=labelOffsets.get(child),oy=labelY.get(child);left=Math.min(left,child.getLeft()+ox);right=Math.max(right,child.getRight()+ox);top=Math.min(top,child.getTop()+oy);bottom=Math.max(bottom,child.getBottom()+oy);}
+   // Translate the complete stack without changing native ordering, font sizes or spacing.
+   float dx=Geometry.centerShift(left,right,root.getWidth(),12*dp(root)),dy=Geometry.centerShift(top,bottom,root.getHeight(),12*dp(root));
+   for(View child:stack){float x=labelOffsets.get(child)+dx,y=labelY.get(child)+dy;if(Math.abs(child.getTranslationX()-x)>.01f)child.setTranslationX(x);if(Math.abs(child.getTranslationY()-y)>.01f)child.setTranslationY(y);}
   }
-  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);
+  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);if(skin.erase){View host=deleteHost(v);View icon=host==null?null:descendant(host,"delete_button_image");if(icon instanceof ImageView&&!icons.containsKey((ImageView)icon))icons.put((ImageView)icon,((ImageView)icon).getImageTintList());}
    
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log(skin.erase?"calculator red delete feedback active":"calculator recoil keypad v3 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();for(View t:new ArrayList<>(labelOffsets.keySet()))if(t!=null){t.setTranslationX(labelOffsets.get(t));if(labelY.containsKey(t))t.setTranslationY(labelY.get(t));}labelOffsets.clear();labelY.clear();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}if(captured){v.setScaleX(baseX);v.setScaleY(baseY);}captured=false;}
+  void restore(View v){skin.stop();resetAlignment();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
   @Override public void onViewAttachedToWindow(View v){apply(v);if(!skin.erase)v.post(()->{if(v.isAttachedToWindow())alignGrid(v);});}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);if(!skin.erase)alignGrid(v);}
@@ -173,7 +170,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   final WeakReference<HorizontalScrollView> host;final Method selected;final Visuals.Tabs skin;final int slop;
   final android.view.VelocityTracker[] velocity={null};
   WeakReference<ViewGroup> stripRef=new WeakReference<>(null);Drawable oldStrip;boolean active,tracking,dragging,failed,logged,consumeUntilUp;
-  float startX,startY,grab;int pointer=-1;final int[] origin=new int[2],stripPos=new int[2];
+  float startX,startY,grab,dragWidth;int pointer=-1;final int[] origin=new int[2],stripPos=new int[2];
   final WeakHashMap<View,Float> hidden=new WeakHashMap<>();final WeakHashMap<View,ColorStateList> tints=new WeakHashMap<>();
   TabState(HorizontalScrollView v,Method selected){host=new WeakReference<>(v);this.selected=selected;skin=new Visuals.Tabs(dp(v),dark(v));slop=ViewConfiguration.get(v.getContext()).getScaledTouchSlop();}
   ArrayList<View> children(ViewGroup strip){ArrayList<View> out=new ArrayList<>();for(int i=0;i<strip.getChildCount();i++){View v=strip.getChildAt(i);if(v.getVisibility()==View.VISIBLE&&v.getWidth()>0&&v.isEnabled())out.add(v);}return out;}
@@ -200,19 +197,19 @@ public final class Hooks implements IXposedHookLoadPackage {
    MotionEvent e=(MotionEvent)p.args[0];int action=e.getActionMasked();
    if(action==MotionEvent.ACTION_DOWN){consumeUntilUp=false;abort();ArrayList<View> list=children(strip);if(list.size()!=3)return;View current=selectedView(v,strip,list);if(current==null)return;float x=localX(v,strip,e.getX());v.getLocationOnScreen(origin);strip.getLocationOnScreen(stripPos);float y=e.getY()+origin[1]-stripPos[1];
     if(x<current.getLeft()||x>current.getRight()||y<0||y>strip.getHeight())return;
-    tracking=true;pointer=e.getPointerId(0);startX=x;startY=e.getY();grab=x-current.getLeft();velocity[0]=android.view.VelocityTracker.obtain();velocity[0].addMovement(e);if(v.getParent()!=null)v.getParent().requestDisallowInterceptTouchEvent(true);return;
+    tracking=true;pointer=e.getPointerId(0);startX=x;startY=e.getY();grab=x-current.getLeft();dragWidth=current.getWidth();velocity[0]=android.view.VelocityTracker.obtain();velocity[0].addMovement(e);if(v.getParent()!=null)v.getParent().requestDisallowInterceptTouchEvent(true);return;
    }
    if(consumeUntilUp){if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)consumeUntilUp=false;p.setResult(true);return;}
    if(!tracking)return;
    if(velocity[0]!=null)velocity[0].addMovement(e);
    if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_POINTER_DOWN||action==MotionEvent.ACTION_POINTER_UP){boolean was=dragging;abort();safeSync(true);if(was){consumeUntilUp=action!=MotionEvent.ACTION_CANCEL&&action!=MotionEvent.ACTION_UP;p.setResult(true);}return;}
-   int idx=e.findPointerIndex(pointer);if(idx<0){boolean was=dragging;abort();safeSync(true);if(was)p.setResult(true);return;}
+   int idx=e.findPointerIndex(pointer);if(idx<0){boolean was=dragging;abort();safeSync(true);if(was){consumeUntilUp=true;p.setResult(true);}return;}
    float x=localX(v,strip,e.getX(idx));float dx=x-startX,dy=e.getY(idx)-startY;
    if(action==MotionEvent.ACTION_MOVE){if(!dragging){if(Math.abs(dy)>slop&&Math.abs(dy)>Math.abs(dx)){abort();return;}if(Math.abs(dx)<=slop||Math.abs(dx)<=Math.abs(dy)*1.25f)return;
       MotionEvent cancel=MotionEvent.obtain(e);cancel.setAction(MotionEvent.ACTION_CANCEL);try{XposedBridge.invokeOriginalMethod(p.method,v,new Object[]{cancel});}finally{cancel.recycle();}dragging=true;if(v.getParent()!=null)v.getParent().requestDisallowInterceptTouchEvent(true);
     }
     ArrayList<View> list=children(strip);if(list.size()!=3){abort();safeSync(false);consumeUntilUp=true;p.setResult(true);return;}
-    float min=Float.MAX_VALUE,max=-Float.MAX_VALUE;for(View child:list){min=Math.min(min,child.getLeft());max=Math.max(max,child.getRight());}float w=(max-min)/3f;if(!Float.isFinite(w)||w<=0){abort();safeSync(false);p.setResult(true);return;}float left=Geometry.dragLeft(x,grab,min,max,w);skin.drag(left,left+w);p.setResult(true);return;
+    float min=Float.MAX_VALUE,max=-Float.MAX_VALUE;for(View child:list){min=Math.min(min,child.getLeft());max=Math.max(max,child.getRight());}float w=dragWidth>0?Math.min(dragWidth,max-min):(max-min)/3f;if(!Float.isFinite(w)||w<=0){abort();safeSync(false);p.setResult(true);return;}float left=Geometry.dragLeft(x,grab,min,max,w);skin.drag(left,left+w);p.setResult(true);return;
    }
    if(action==MotionEvent.ACTION_UP){boolean was=dragging;if(!was){abort();return;}ArrayList<View> list=children(strip);float projected=(skin.left+skin.right)*.5f;if(velocity[0]!=null){velocity[0].computeCurrentVelocity(1000);projected=Geometry.projection(projected,velocity[0].getXVelocity(pointer),dp(v));}View target=closest(list,projected);abort();if(target!=null&&target!=selectedView(v,strip,list)){
       int desired=strip.indexOfChild(target);boolean handled=target.performClick();

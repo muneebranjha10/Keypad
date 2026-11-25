@@ -27,3 +27,6 @@ Keep native digit/letter stack intact, shared radius across keys, avoid repeated
 
 ## v0.8
 Recording-based changes: keep touch receiver fixed while animating key drawable recoil; square bitmap alpha-mask pass with ordered gradient stops; center native vertical number/letter stacks while leaving horizontal layout unchanged; observe native backspace touch without intercepting its action; animate newly appended digit from right in verified EllipsisEditText using temporary drawing span, without altering dialed text. Text-entry effect recreates the calculator's animateInFromRight behavior, not its proprietary renderer. Test single taps, long holds, fast entry, cursor insertion and backspace. Runtime and all orientations remain unverified.
+
+## v0.9 stability audit
+Latest-edit generation guard prevents stale number-entry animation; release animation resources on detach; fit the full recoil halo inside key bounds; center complete visible native label groups without changing text or order; discover sibling backspace icon; fit the entire slider capsule inside track; use actual selected-tab width on drag and consume cancelled pointer streams. No per-frame native scale writes. Added regression tests for these pure geometry and text eligibility helpers. Android UI, real glass fidelity, actual delete behavior and 120 Hz frame pacing still require testing on the phone.
