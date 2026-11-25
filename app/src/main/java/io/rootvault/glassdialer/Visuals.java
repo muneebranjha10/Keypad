@@ -28,6 +28,7 @@ final class Visuals {
   void erase(boolean e){if(erase!=e){erase=e;halo=null;invalidateSelf();}}
   void change(){invalidateSelf();if(frame!=null)frame.run();}
   void press(boolean down){if(pressed==down)return;pressed=down;
+   if(!ValueAnimator.areAnimatorsEnabled()){glow=down?1:0;recoil=0;change();return;}
    if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}
    float start=glow;
    // Keep very short taps visible, even if released before the next display frame.
@@ -43,8 +44,8 @@ final class Visuals {
   void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}anim=motion=null;pressed=false;glow=recoil=0;halo=null;change();}
   void prepareHalo(int size,float radius){
    if(halo!=null&&haloSize==size&&Math.abs(haloRadius-radius)<.5f)return;
-   haloSize=size;haloRadius=radius;halo=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);
-   Canvas c=new Canvas(halo);float center=size*.5f;
+   haloSize=size;haloRadius=radius;int pixels=Math.min(512,size);halo=Bitmap.createBitmap(pixels,pixels,Bitmap.Config.ARGB_8888);
+   Canvas c=new Canvas(halo);c.scale(pixels/(float)size,pixels/(float)size);float center=size*.5f;
    int first=erase?0xfffce0ff:0xffc7f9b3,end=erase?0xffffc8c8:0xff99ded2;
    Paint q=new Paint(Paint.ANTI_ALIAS_FLAG);
    q.setShader(new LinearGradient(0,0,size,size,new int[]{first,end},null,Shader.TileMode.CLAMP));
@@ -71,7 +72,7 @@ final class Visuals {
     int size=Math.max(8,(int)Math.floor(Math.min(available/1.02f,2*(radius+6*dp))));
     prepareHalo(size,radius);
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
-    c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
+    r.set(x-size*.5f,y-size*.5f,x+size*.5f,y+size*.5f);c.drawBitmap(halo,null,r,bitmapPaint);
    }
    p.setAlpha(255);c.restoreToCount(checkpoint);
   }
@@ -83,13 +84,13 @@ final class Visuals {
   void move(float l,float r,boolean animate){
    if(!Float.isFinite(l)||!Float.isFinite(r)||r<=l)return;
    if(Float.isFinite(left)&&Math.abs(targetL-l)<.1f&&Math.abs(targetR-r)<.1f&&lift==0){if(animate&&anim!=null&&anim.isRunning())return;if(Math.abs(left-l)<.1f&&Math.abs(right-r)<.1f&&Math.abs(stretch)<.01f)return;}
-   targetL=l;targetR=r;if(anim!=null)anim.cancel();
-   if(!animate||!Float.isFinite(left)){left=l;right=r;stretch=0;invalidateSelf();return;}
+   targetL=l;targetR=r;if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}
+   if(!animate||!ValueAnimator.areAnimatorsEnabled()||!Float.isFinite(left)){left=l;right=r;stretch=0;invalidateSelf();return;}
    float a=left,b=right;anim=ValueAnimator.ofFloat(0,1);anim.setDuration(390);
    anim.setInterpolator(new android.view.animation.LinearInterpolator());
    anim.addUpdateListener(v->{float f=(float)v.getAnimatedValue();float t=Geometry.spring(f);left=a+(l-a)*t;right=b+(r-b)*t;stretch=(float)Math.sin(Math.PI*f)*Math.min(2.5f*dp,Math.abs(l-a)*.045f);invalidateSelf();});anim.start();
   }
-  void drag(float l,float r){if(anim!=null)anim.cancel();left=l;right=r;targetL=l;targetR=r;lift=1;stretch=1.3f*dp;invalidateSelf();}
+  void drag(float l,float r){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}left=l;right=r;targetL=l;targetR=r;lift=1;stretch=1.3f*dp;invalidateSelf();}
   void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}lift=stretch=0;left=right=Float.NaN;invalidateSelf();}
   @Override public void draw(Canvas c){
    Rect b=getBounds();if(b.width()<4||b.height()<4)return;
@@ -97,7 +98,7 @@ final class Visuals {
    shade(c,r,rad,new LinearGradient(0,r.top,0,r.bottom,dark?new int[]{0xff1d1d1d,0xff171717,0xff1b1b1b}:new int[]{0xfffafbfc,0xffe4e7ec,0xfff1f3f6},new float[]{0,.53f,1},Shader.TileMode.CLAMP));
    stroke(c,r,rad,new LinearGradient(r.left,r.top,r.right,r.bottom,dark?new int[]{0x21ffffff,0x08ffffff,0x17ffffff}:new int[]{0xffffffff,0x40828b96,0xaaffffff},new float[]{0,.50f,1},Shader.TileMode.CLAMP),.85f*dp);
    if(!Float.isFinite(left)||right<=left)return;
-   float pad=Math.min(3*dp,r.height()*.12f);float min=r.left+pad,max=r.right-pad;float width=Math.min(max-min,Math.max(0,right-left-2*pad+2*stretch));float center=b.left+(left+right)*.5f;float fitted=Geometry.fitLeft(center,width,min,max);t.set(fitted,r.top+pad-(lift*.45f*dp),fitted+width,r.bottom-pad+(lift*.45f*dp));if(t.width()<2||t.height()<2)return;float tr=Math.min(t.width(),t.height())*.5f;
+   float pad=Math.min(3*dp,Math.min(r.height(),r.width())*.12f);float min=r.left+pad,max=r.right-pad;float width=Math.min(max-min,Math.max(0,right-left-2*pad+2*stretch));float center=b.left+(left+right)*.5f;float fitted=Geometry.fitLeft(center,width,min,max);t.set(fitted,r.top+pad-(lift*.45f*dp),fitted+width,r.bottom-pad+(lift*.45f*dp));if(t.width()<2||t.height()<2)return;float tr=Math.min(t.width(),t.height())*.5f;
    shade(c,t,tr,new LinearGradient(0,t.top,0,t.bottom,dark?new int[]{0xff494949,0xff353535,0xff303030,0xff363636}:new int[]{0xfffefefe,0xffe0e4e8,0xffd0d5dc,0xfff7f8fa},new float[]{0,.36f,.72f,1},Shader.TileMode.CLAMP));
    shade(c,t,tr,new RadialGradient(t.left+t.width()*.18f,t.top,t.width()*.75f,new int[]{0x22ffffff,0x00ffffff},null,Shader.TileMode.CLAMP));
    stroke(c,t,tr,new LinearGradient(t.left,t.top,t.right,t.bottom,new int[]{0x58ffffff,0x12ffffff,0x24ffffff},new float[]{0,.51f,1},Shader.TileMode.CLAMP),1.1f*dp);

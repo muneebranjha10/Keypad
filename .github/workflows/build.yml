@@ -40,9 +40,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v0.9-beta.apk
+          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v1.0-beta.apk
           for attempt in 1 2 3 4; do
-            if (gh release view v0.9-beta >/dev/null 2>&1 || gh release create v0.9-beta --prerelease --target "$GITHUB_SHA" --title 'Glass Dialer v0.9 Beta' --notes 'Experimental LSPosed module. Device testing required.') && gh release upload v0.9-beta GlassDialer-v0.9-beta.apk --clobber; then exit 0; fi
+            if (gh release view v1.0-beta >/dev/null 2>&1 || gh release create v1.0-beta --prerelease --target "$GITHUB_SHA" --title 'Glass Dialer v1.0 Beta' --notes 'Experimental LSPosed module. Device testing required.') && gh release upload v1.0-beta GlassDialer-v1.0-beta.apk --clobber; then exit 0; fi
             sleep $((attempt * 5))
           done
           echo "::warning::Release API unavailable; signed APK remains available in Actions artifacts."

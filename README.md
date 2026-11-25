@@ -30,3 +30,6 @@ Recording-based changes: keep touch receiver fixed while animating key drawable 
 
 ## v0.9 stability audit
 Latest-edit generation guard prevents stale number-entry animation; release animation resources on detach; fit the full recoil halo inside key bounds; center complete visible native label groups without changing text or order; discover sibling backspace icon; fit the entire slider capsule inside track; use actual selected-tab width on drag and consume cancelled pointer streams. No per-frame native scale writes. Added regression tests for these pure geometry and text eligibility helpers. Android UI, real glass fidelity, actual delete behavior and 120 Hz frame pacing still require testing on the phone.
+
+## v1.0 beta
+Avoid span changes during beforeTextChanged; clear on latest edit; respect native animation disable setting; preserve disabled/stateful digit colors; track delete pointer and slop; consume cancelled tab gesture through its end; cap glow bitmap allocations; constrain narrow slider insets. Pure Java regression checks are not a substitute for Android runtime tests. Device behavior, native hooks on firmware variants, and 120 Hz remain unverified.

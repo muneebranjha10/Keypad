@@ -23,7 +23,7 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
  private Editable owner;
  private EntryMotion(EditText v){editor=v;v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
  static void attach(EditText v){new EntryMotion(v);}
- @Override public void beforeTextChanged(CharSequence s,int st,int count,int after){generation++;start=st;pending=false;clear();}
+ @Override public void beforeTextChanged(CharSequence s,int st,int count,int after){generation++;start=st;pending=false;}
  @Override public void onTextChanged(CharSequence s,int st,int old,int count){
   pending=Geometry.appended(s,st,old,count);
   if(pending)expected=s.charAt(st);
@@ -31,23 +31,22 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
  }
  @Override public void afterTextChanged(Editable e){
   boolean animate=pending;pending=false;int index=start,token=generation;char digit=expected;
-  if(!animate)return;
   // Wait until native formatter, layout, and cursor handling have finished.
-  editor.post(()->{if(token!=generation||editor.getText()!=e||!editor.isAttachedToWindow())return;clear();
+  editor.post(()->{if(token!=generation||editor.getText()!=e||!editor.isAttachedToWindow())return;clear();if(!animate)return;
    if(!Geometry.matchesAppend(e,index,digit)||editor.getSelectionStart()!=e.length()||editor.getSelectionEnd()!=e.length())return;
    if(editor.getLayout()!=null&&(editor.getLayout().getLineCount()==0||editor.getLayout().getParagraphDirection(0)<0))return;
    // Do not replace an existing native replacement span (ellipsis/formatting).
-   if(e.getSpans(index,index+1,ReplacementSpan.class).length!=0)return;
+   if(e.getSpans(index,index+1,ReplacementSpan.class).length!=0||!ValueAnimator.areAnimatorsEnabled())return;
    try{Glyph g=new Glyph(editor.getResources().getDisplayMetrics().density);span=g;owner=e;e.setSpan(g,index,index+1,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     animator=ValueAnimator.ofFloat(0f,1f);animator.setDuration(220);
     animator.setInterpolator(new PathInterpolator(.2f,.8f,.2f,1f));
     animator.addUpdateListener(a->{g.progress=(float)a.getAnimatedValue();editor.invalidate();});
-    animator.addListener(new AnimatorListenerAdapter(){@Override public void onAnimationEnd(Animator a){if(span==g)remove();}});
+    animator.addListener(new AnimatorListenerAdapter(){@Override public void onAnimationEnd(Animator a){if(span==g&&token==generation)remove();}});
     animator.start();
    }catch(Throwable ignored){clear();}
   });
  }
- private void remove(){Glyph g=span;Editable e=owner;span=null;owner=null;animator=null;if(g!=null&&e!=null)e.removeSpan(g);editor.invalidate();}
+ private void remove(){Glyph g=span;Editable e=owner;span=null;owner=null;animator=null;try{if(g!=null&&e!=null)e.removeSpan(g);}catch(RuntimeException ignored){}editor.invalidate();}
  private void clear(){ValueAnimator a=animator;if(a!=null){a.removeAllListeners();a.removeAllUpdateListeners();a.cancel();}remove();}
  @Override public void onViewAttachedToWindow(View v){}
  @Override public void onViewDetachedFromWindow(View v){generation++;pending=false;clear();}
