@@ -36,3 +36,6 @@ Avoid span changes during beforeTextChanged; clear on latest edit; respect nativ
 
 ## v1.1 — visible motion
 Based on the recorded comparison showing lit keys but missing number-line motion: replace span-based entry animation with draw-only native number-line slide/fade, triggered by an added dial character even when formatting adds spaces. Does not move a single digit independently. Apply synchronized visual recoil to key labels and background with 13% compression, retain short-tap rebound and preserve touch geometry. Respect Android animation settings. Runtime effect and actual frame rate still unverified.
+
+## v1.2
+Clean number-only keypad: hide secondary text and known auxiliary icons visually; preserve native long-press actions and accessibility semantics. Center the primary digit using its layout/ink metrics. Per-glyph entry animation uses a clipped native Layout redraw, independent of cursor selection and formatting separators; existing digits retain their layout. Restore native backspace idle tint and serialize touch/press feedback. No real-device verification; custom animation is a recreation, not a proprietary calculator port. Test RTL, ellipsis, large text and backspace on device.

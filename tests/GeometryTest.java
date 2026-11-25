@@ -24,6 +24,13 @@ public final class GeometryTest {
   for(int w=10;w<=500;w+=10)for(int x=-50;x<=550;x+=10){float fitted=Geometry.fitLeft(x,w,0,500);check(fitted>=0&&fitted+w<=500.001f,"capsule bounds");}
   check(Geometry.dialCount("1234 567")==7,"formatted number");check(Geometry.dialCount("+1 (234)")==5,"formatted international");check(Geometry.dialCount("12#*")==4,"dial symbols");check(Geometry.dialCount("")==0,"empty input");check(Geometry.dialCount("١٢٣")==3,"localized digits");
   close(Geometry.recoilScale(1),.87f);close(Geometry.recoilScale(0),1);
+  check(Geometry.dialString("9,898").equals("9898"),"normalized number");
+  check(Geometry.insertedOrdinal("989","9898")==3,"append");
+  check(Geometry.insertedOrdinal("12","132")==1,"middle");
+  check(Geometry.insertedOrdinal("12","1")==-1,"delete");
+  check(Geometry.insertedOrdinal("12","34")==-1,"replace");
+  check(Geometry.dialIndex("9,898",1)==2,"formatted glyph index");
+  close(Geometry.entryEase(0),0);close(Geometry.entryEase(1),1);
   System.out.println("Geometry checks passed: "+count);
  }
 }

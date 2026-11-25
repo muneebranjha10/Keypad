@@ -50,7 +50,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   if(tab!=null&&HorizontalScrollView.class.isAssignableFrom(tab))try{installTabs(tab);log("tab hooks installed");}catch(Throwable e){log("tab hooks unavailable: "+e);}
   else log("tab class missing; stock UI retained");
   try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
-  try{installEntry(p.classLoader);}catch(Throwable e){log("entry animation unavailable: "+e);}
+  try{EntryMotion.install();installEntry(p.classLoader);}catch(Throwable e){log("entry animation unavailable: "+e);}
  }
  private static boolean themeOnly(){return false;}
  private static final WeakHashMap<View,Boolean> entryViews=new WeakHashMap<>();
@@ -99,19 +99,20 @@ public final class Hooks implements IXposedHookLoadPackage {
    View target=descendant(v,"delete_button_background_layout"),icon=descendant(v,"delete_button_image");if(target==null||!target.isShown()||!v.isEnabled())return;
    MotionEvent e=(MotionEvent)p.args[0];int action=e.getActionMasked();
    installDelete(target);KeyState s=keys.get(target);if(s==null||s.failed||target.getBackground()!=s.wrapper)return;
-   if(action==MotionEvent.ACTION_DOWN){s.deleteTracking=false;s.deletePointer=-1;int[] parent=new int[2],child=new int[2];v.getLocationOnScreen(parent);target.getLocationOnScreen(child);
+   if(action==MotionEvent.ACTION_DOWN){s.deleteTouchOwner=true;s.deleteSequence++;s.deleteTracking=false;s.deletePointer=-1;s.skin.press(false);int[] parent=new int[2],child=new int[2];v.getLocationOnScreen(parent);target.getLocationOnScreen(child);
     float x=e.getX()+parent[0]-child[0],y=e.getY()+parent[1]-child[1];boolean hit=Geometry.hit(x,y,target.getWidth(),target.getHeight(),0);
     if(!hit&&icon!=null&&icon.isShown()){icon.getLocationOnScreen(child);hit=Geometry.hit(e.getX()+parent[0]-child[0],e.getY()+parent[1]-child[1],icon.getWidth(),icon.getHeight(),0);}
     if(hit){s.deleteTracking=true;s.deletePointer=e.getPointerId(0);s.skin.press(true);}return;}
+   if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){s.deleteTracking=false;s.deletePointer=-1;s.skin.press(false);int seq=s.deleteSequence;target.post(()->{if(s.deleteSequence==seq)s.deleteTouchOwner=false;});return;}
    if(!s.deleteTracking)return;
-   if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_POINTER_DOWN||action==MotionEvent.ACTION_POINTER_UP||e.findPointerIndex(s.deletePointer)<0){s.deleteTracking=false;s.deletePointer=-1;s.skin.press(false);return;}
+   if(action==MotionEvent.ACTION_POINTER_DOWN||action==MotionEvent.ACTION_POINTER_UP||e.findPointerIndex(s.deletePointer)<0){s.deleteTracking=false;s.deletePointer=-1;s.skin.press(false);return;}
    if(action==MotionEvent.ACTION_MOVE){int i=e.findPointerIndex(s.deletePointer);int[] parent=new int[2],child=new int[2];v.getLocationOnScreen(parent);target.getLocationOnScreen(child);float slop=ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
     boolean hit=Geometry.hit(e.getX(i)+parent[0]-child[0],e.getY(i)+parent[1]-child[1],target.getWidth(),target.getHeight(),slop);
     if(!hit&&icon!=null&&icon.isShown()){icon.getLocationOnScreen(child);hit=Geometry.hit(e.getX(i)+parent[0]-child[0],e.getY(i)+parent[1]-child[1],icon.getWidth(),icon.getHeight(),slop);}s.skin.press(hit);}
   }catch(Throwable t){log("delete touch feedback: "+t);}}});
   XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);if(v instanceof EditText&&v.getClass().getSimpleName().equals("EllipsisEditText")&&v.getClass().getName().startsWith(PKG+"."))attachEntry((EditText)v);
    String name=idName(v);if(CALL_LAYOUT.equals(v.getClass().getName())||"delete_button_image".equals(name)||"delete_button_background_layout".equals(name)){View root=deleteRoot(v);if(root!=null)root.post(()->{try{installDelete(root);}catch(Throwable e){log("delete root: "+e);}});}}catch(Throwable t){log("dialpad detail: "+t);}}});
-  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v))||CALL_LAYOUT.equals(v.getClass().getName()))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()&&!s.deleteTracking){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v))||CALL_LAYOUT.equals(v.getClass().getName()))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()&&!s.deleteTouchOwner){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
  }
  private static boolean sameGrid(View a,View b){
   View x=a;for(int i=0;i<5&&x!=null;i++){View y=b;for(int j=0;j<5&&y!=null;j++){if(x==y&&x!=a&&x!=b)return true;android.view.ViewParent p=y.getParent();y=p instanceof View?(View)p:null;}android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;
@@ -127,12 +128,16 @@ public final class Hooks implements IXposedHookLoadPackage {
   Drawable stock;ColorStateList stockTint;boolean failed,reported,captured,deleteTracking;int deletePointer=-1;
   float baseX=1,baseY=1;
   View innerDelete; Drawable innerStock; boolean innerCaptured;
-  final WeakHashMap<View,Float> labelOffsets=new WeakHashMap<>(),labelY=new WeakHashMap<>();
+  final WeakHashMap<View,Float> labelOffsets=new WeakHashMap<>(),labelY=new WeakHashMap<>(),hiddenHints=new WeakHashMap<>();
+  boolean deleteTouchOwner;int deleteSequence;
   final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
   final WeakHashMap<ImageView,ColorStateList> icons=new WeakHashMap<>();
   final ArgbEvaluator evaluator=new ArgbEvaluator();
   KeyState(View v){view=new WeakReference<>(v);skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintFrame;}
-  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if((s.matches("[0-9*#＊＃]")||"dialpad_key_number".equals(idName(t)))&&!labels.containsKey(t))labels.put(t,t.getTextColors());}
+  boolean primaryLabel(TextView t){String s=t.getText()==null?"":t.getText().toString().trim();return "dialpad_key_number".equals(idName(t))||s.matches("[0-9*#＊＃]")||(s.length()==1&&Character.isDigit(s.charAt(0)));}
+  void hideHint(View v){if(!hiddenHints.containsKey(v))hiddenHints.put(v,v.getAlpha());if(v.getAlpha()!=0f)v.setAlpha(0f);}
+  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if(!skin.erase){if(primaryLabel(t)){if(hiddenHints.containsKey(t)){t.setAlpha(hiddenHints.remove(t));}if(!labels.containsKey(t))labels.put(t,t.getTextColors());}else if(!s.isEmpty()){hideHint(t);}}}
+   if(!skin.erase&&v instanceof ImageView){String n=idName(v);if(n.contains("voicemail")||n.contains("letter")||n.contains("sub_"))hideHint(v);}
    if(skin.erase&&v instanceof ImageView&&("delete_button_image".equals(idName(v))||v==view.get())){ImageView i=(ImageView)v;if(!icons.containsKey(i))icons.put(i,i.getImageTintList());}
    if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
   void paintFrame(){View v=view.get();if(v==null||!captured)return;
@@ -142,34 +147,33 @@ public final class Hooks implements IXposedHookLoadPackage {
    v.postInvalidateOnAnimation();
    for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;ColorStateList original=labels.get(t);if(original==null)continue;if(skin.glow<=.002f||!t.isEnabled()){if(t.getTextColors()!=original)t.setTextColor(original);continue;}int from=original.getColorForState(t.getDrawableState(),original.getDefaultColor()),to=skin.dark?0xff99ded2:0xff41c19f;
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
-   if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;ColorStateList original=icons.get(i);if(!i.isEnabled()||!i.isShown()){if(i.getImageTintList()!=original)i.setImageTintList(original);continue;}int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
-  }
-  boolean hasLabel(View v){
-   if(v.getVisibility()!=View.VISIBLE)return false;
-   if(v instanceof TextView){CharSequence s=((TextView)v).getText();return s!=null&&s.length()>0;}
-   if(v instanceof ImageView){String n=idName(v);return n.contains("voicemail")||n.contains("letter")||n.contains("symbol");}
-   if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)if(hasLabel(g.getChildAt(i)))return true;}
-   return false;
+   if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;ColorStateList original=icons.get(i);if(!i.isEnabled()||!i.isShown()||skin.glow<=.002f){if(i.getImageTintList()!=original)i.setImageTintList(original);continue;}int from=original==null?(skin.dark?0xffeeeeee:0xff333333):original.getColorForState(i.getDrawableState(),original.getDefaultColor()),to=0xffff777b;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));i.postInvalidateOnAnimation();}
   }
   void resetAlignment(){for(View t:new ArrayList<>(labelOffsets.keySet()))if(t!=null){Float x=labelOffsets.get(t),y=labelY.get(t);if(x!=null)t.setTranslationX(x);if(y!=null)t.setTranslationY(y);}labelOffsets.clear();labelY.clear();}
   void alignLabels(View root){
-   if(skin.erase||root.getWidth()<=0||root.getHeight()<=0||!(root instanceof ViewGroup))return;
-   ViewGroup g=(ViewGroup)root;ArrayList<View> stack=new ArrayList<>();
-   for(int i=0;i<g.getChildCount();i++){View child=g.getChildAt(i);if(child.getWidth()>0&&child.getHeight()>0&&hasLabel(child))stack.add(child);}
-   if(stack.isEmpty()){resetAlignment();return;}
-   for(View child:new ArrayList<>(labelOffsets.keySet()))if(child!=null&&!stack.contains(child)){Float x=labelOffsets.remove(child),y=labelY.remove(child);if(x!=null)child.setTranslationX(x);if(y!=null)child.setTranslationY(y);}
-   float left=Float.MAX_VALUE,top=Float.MAX_VALUE,right=-Float.MAX_VALUE,bottom=-Float.MAX_VALUE;
-   for(View child:stack){if(!labelOffsets.containsKey(child)){labelOffsets.put(child,child.getTranslationX());labelY.put(child,child.getTranslationY());}
-    float ox=labelOffsets.get(child),oy=labelY.get(child);left=Math.min(left,child.getLeft()+ox);right=Math.max(right,child.getRight()+ox);top=Math.min(top,child.getTop()+oy);bottom=Math.max(bottom,child.getBottom()+oy);}
-   // Translate the complete stack without changing native ordering, font sizes or spacing.
-   float dx=Geometry.centerShift(left,right,root.getWidth(),12*dp(root)),dy=Geometry.centerShift(top,bottom,root.getHeight(),12*dp(root));
-   for(View child:stack){float x=labelOffsets.get(child)+dx,y=labelY.get(child)+dy;if(Math.abs(child.getTranslationX()-x)>.01f)child.setTranslationX(x);if(Math.abs(child.getTranslationY()-y)>.01f)child.setTranslationY(y);}
+   if(skin.erase||root.getWidth()<=0||root.getHeight()<=0)return;
+   for(TextView t:new ArrayList<>(labels.keySet())){
+    if(t==null||!primaryLabel(t)||t.getWidth()<=0||t.getHeight()<=0||!t.isShown())continue;
+    android.text.Layout layout=t.getLayout();if(layout==null||layout.getLineCount()==0)continue;
+    float x=t.getLeft(),y=t.getTop();android.view.ViewParent parent=t.getParent();
+    while(parent instanceof View&&parent!=root){View p=(View)parent;x+=p.getLeft()+p.getTranslationX()-p.getScrollX();y+=p.getTop()+p.getTranslationY()-p.getScrollY();parent=p.getParent();}
+    if(parent!=root)continue;
+    if(!labelOffsets.containsKey(t)){labelOffsets.put(t,t.getTranslationX());labelY.put(t,t.getTranslationY());}
+    float ox=labelOffsets.get(t),oy=labelY.get(t);
+    String digit=t.getText().toString();Rect ink=new Rect();t.getPaint().getTextBounds(digit,0,digit.length(),ink);
+    float centerX=x+ox+t.getCompoundPaddingLeft()+(layout.getLineLeft(0)+layout.getLineRight(0))*.5f;
+    float centerY=y+oy+t.getTotalPaddingTop()+layout.getLineBaseline(0)+(ink.top+ink.bottom)*.5f;
+    float dx=root.getWidth()*.5f-centerX,dy=root.getHeight()*.5f-centerY;
+    // Adjust only a verified digit; leave native sizing and touch area intact.
+    if(Math.abs(dx)<=root.getWidth()*.45f)t.setTranslationX(ox+dx);
+    if(Math.abs(dy)<=root.getHeight()*.45f)t.setTranslationY(oy+dy);
+   }
   }
   void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);if(skin.erase){View host=deleteHost(v);View icon=host==null?null:descendant(host,"delete_button_image");if(icon instanceof ImageView&&!icons.containsKey((ImageView)icon))icons.put((ImageView)icon,((ImageView)icon).getImageTintList());}
    
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log(skin.erase?"calculator red delete feedback active":"calculator recoil keypad v3 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){deleteTracking=false;deletePointer=-1;skin.stop();resetAlignment();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
+  void restore(View v){deleteTracking=false;deleteTouchOwner=false;deleteSequence++;deletePointer=-1;skin.stop();resetAlignment();for(View h:new ArrayList<>(hiddenHints.keySet()))if(h!=null)h.setAlpha(hiddenHints.get(h));hiddenHints.clear();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
   @Override public void onViewAttachedToWindow(View v){apply(v);if(!skin.erase)v.post(()->{if(v.isAttachedToWindow())alignGrid(v);});}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);if(!skin.erase)alignGrid(v);}
