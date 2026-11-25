@@ -32,7 +32,7 @@ public final class MainActivity extends Activity {
   content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setGravity(Gravity.CENTER_HORIZONTAL);content.setPadding(dp(24),dp(18),dp(24),dp(24));scroll.addView(content,new ScrollView.LayoutParams(-1,-2));
   scroll.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());content.setPadding(dp(24)+bars.left,dp(18)+bars.top,dp(24)+bars.right,dp(24)+bars.bottom);return insets;});
   setContentView(scroll);
-  add(text("GLASS DIALER  •  v1.8",12,0xff91bdf5,true),4);
+  add(text("GLASS DIALER  •  v1.8.1",12,0xff91bdf5,true),4);
   if(!setup){
    Orb orb=new Orb();LinearLayout.LayoutParams op=new LinearLayout.LayoutParams(-1,dp(210));op.topMargin=dp(8);content.addView(orb,op);
    add(text("s23_hype",34,Color.WHITE,true),0);

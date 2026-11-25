@@ -1,6 +1,7 @@
 package io.rootvault.glassdialer;
 final class Geometry {
  private Geometry(){}
+ static int creditPadding(int nativeBottom,int listBottom,int safeBottom,int height){return Math.max(Math.max(0,nativeBottom),listBottom-safeBottom)+Math.max(0,height);}
  static float clamp(float v,float lo,float hi){return Math.max(lo,Math.min(hi,v));}
  static float radius(float width,float height,float dp){return Math.max(0,Math.min(39*dp,.45f*Math.min(width,height)));}
  static boolean appended(CharSequence s,int st,int old,int count){return s!=null&&old==0&&count==1&&st>=0&&st==s.length()-1&&"0123456789*#+".indexOf(s.charAt(st))>=0;}

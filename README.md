@@ -57,3 +57,6 @@ Recording inspection shows new digits fading while earlier centered digits jump 
 
 ## v1.8 release
 Creator credit in the verified main Contacts layout, animated Telegram welcome and LSPosed setup guide. Welcome shown on a fresh module launch; Telegram join is optional, no account verification. No modifications to v1.7 keypad, entry animation or navigation. Release branding removes beta from current version; existing historical beta notes remain. New Contacts footer and welcome need device testing. Channel: https://t.me/s23_hype
+
+## v1.8.1
+Move creator credit to a noninteractive overlay at the safe bottom of the Contacts list, with reserved trailing scroll space. Show only when the list reaches its end; measure native tab bar top and existing padding to prevent overlap. No contact adapter modification. Short lists that fit the screen count as already at their end. Actual Samsung runtime verification required.

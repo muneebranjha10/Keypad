@@ -43,6 +43,7 @@ public final class GeometryTest {
   check(Geometry.appendRun("123","1234"),"append raw");check(Geometry.appendRun("","*"),"first symbol");check(!Geometry.appendRun("123","12"),"deletion fallback");check(!Geometry.appendRun("12","132"),"middle fallback");check(!Geometry.appendRun("123","1,234"),"formatting fallback");check(Geometry.simpleDialRun("+1 (23)-4"),"safe run");check(!Geometry.simpleDialRun("1A"),"unsupported run");
   close(Geometry.lerp(50,30,0),50);close(Geometry.lerp(50,30,1),30);close(Geometry.lerp(50,30,.5f),40);
   for(int k=0;k<=100;k++){float t=k/100f;float x=Geometry.lerp(100,80,t);check(x>=80&&x<=100,"reflow bounds");}
+  check(Geometry.creditPadding(100,1000,900,32)==132,"credit native padding");check(Geometry.creditPadding(20,1000,880,32)==152,"credit above tabs");check(Geometry.creditPadding(0,1000,1000,32)==32,"credit space");
   System.out.println("Geometry checks passed: "+count);
  }
 }

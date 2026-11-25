@@ -40,9 +40,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v1.8.apk
+          cp app/build/outputs/apk/debug/app-debug.apk GlassDialer-v1.8.1.apk
           for attempt in 1 2 3 4; do
-            if (gh release view v1.8 >/dev/null 2>&1 || gh release create v1.8 --target "$GITHUB_SHA" --title 'Glass Dialer v1.8' --notes 'Glass Dialer by s23_hype. LSPosed required. Includes Telegram welcome and activation guide.') && gh release upload v1.8 GlassDialer-v1.8.apk --clobber; then exit 0; fi
+            if (gh release view v1.8.1 >/dev/null 2>&1 || gh release create v1.8.1 --target "$GITHUB_SHA" --title 'Glass Dialer v1.8.1' --notes 'Glass Dialer by s23_hype. LSPosed required. Includes Telegram welcome and activation guide.') && gh release upload v1.8.1 GlassDialer-v1.8.1.apk --clobber; then exit 0; fi
             sleep $((attempt * 5))
           done
           echo "::warning::Release API unavailable; signed APK remains available in Actions artifacts."
