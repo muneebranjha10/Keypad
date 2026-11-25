@@ -23,12 +23,14 @@ final class Visuals {
   Runnable frame;
   final Paint bitmapPaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
   Bitmap halo; int haloSize; float haloRadius,commonRadius;
+  Shader fillGlow,edgeGlow;float shaderX=Float.NaN,shaderY=Float.NaN,shaderR=Float.NaN;
+  void prepareShaders(float x,float y,float radius){if(fillGlow!=null&&shaderX==x&&shaderY==y&&shaderR==radius)return;shaderX=x;shaderY=y;shaderR=radius;fillGlow=new LinearGradient(x-radius,y-radius,x+radius,y+radius,new int[]{0xff344334,0xff2b342b,0xff253332},null,Shader.TileMode.CLAMP);edgeGlow=new RadialGradient(x,y,radius,new int[]{0x00000000,0x00000000,0x31000000,0x61000000},new float[]{0,.58f,.90f,1},Shader.TileMode.CLAMP);}
   void radius(float r){if(Math.abs(commonRadius-r)>.25f){commonRadius=r;halo=null;invalidateSelf();}}
   Key(float dp,boolean dark){super(dp,dark);}
   void change(){invalidateSelf();if(frame!=null)frame.run();}
   void press(boolean down){if(pressed==down)return;pressed=down;
+   if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();motion=null;}
    if(!ValueAnimator.areAnimatorsEnabled()){glow=down?1:0;recoil=0;change();return;}
-   if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}
    float start=glow;
    // Keep very short taps visible, even if released before the next display frame.
    if(down){anim=ValueAnimator.ofFloat(start,1f);anim.setDuration(100);}
@@ -58,18 +60,18 @@ final class Visuals {
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
-   float radius=Math.min(Geometry.safeRadius(b.width(),b.height(),dp),commonRadius>0?commonRadius:36*dp);
+   float radius=Math.min(Geometry.safeRadius(b.width(),b.height(),dp),commonRadius>0?commonRadius:39*dp);
    if(radius<1)return;
    int checkpoint=c.save();float scale=Geometry.recoilScale(recoil);c.scale(scale,scale,x,y);
    int base=dark?0xff171717:0xfffcfcff;
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
-    int a=0xff344334,mid=0xff2b342b,end=0xff253332;
-    p.setColor(Color.WHITE);p.setShader(new LinearGradient(x-radius,y-radius,x+radius,y+radius,new int[]{a,mid,end},null,Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
-    p.setColor(Color.WHITE);p.setShader(new RadialGradient(x,y,radius,new int[]{0x00000000,0x00000000,0x31000000,0x61000000},new float[]{0,.58f,.90f,1},Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
+    prepareShaders(x,y,radius);
+    p.setColor(Color.WHITE);p.setShader(fillGlow);p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
+    p.setColor(Color.WHITE);p.setShader(edgeGlow);p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
    }
    if(glow>.002f){
-    int size=Math.max(8,(int)Math.floor(Math.min(available/1.02f,2*(radius+6*dp))));
+    int size=Math.max(8,(int)Math.floor(Math.min(available/1.02f,2*(radius+4*dp))));
     prepareHalo(size,radius);
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
     r.set(x-size*.5f,y-size*.5f,x+size*.5f,y+size*.5f);c.drawBitmap(halo,null,r,bitmapPaint);

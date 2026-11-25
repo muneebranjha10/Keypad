@@ -4,8 +4,8 @@ public final class GeometryTest {
  static void check(boolean c,String s){count++;if(!c)throw new AssertionError(s);}
  static void close(float a,float b){check(Math.abs(a-b)<.001f,a+" != "+b);}
  public static void main(String[] args){
-  close(Geometry.radius(120,100,1),36);close(Geometry.radius(100,60,1),25.5f);close(Geometry.radius(0,100,1),0);
-  close(Geometry.radius(300,200,3),85);close(Geometry.radius(60,100,1),25.5f);
+  close(Geometry.radius(120,100,1),39);close(Geometry.radius(100,60,1),27f);close(Geometry.radius(0,100,1),0);
+  close(Geometry.radius(300,200,3),90);close(Geometry.radius(60,100,1),27f);
   close(Geometry.dragLeft(-20,20,0,300,100),0);close(Geometry.dragLeft(350,20,0,300,100),200);close(Geometry.dragLeft(150,20,0,300,100),130);
   close(Geometry.dragLeft(20,5,10,90,100),10);
   check(Geometry.nearest(10,new float[]{50,150,250})==0,"left");check(Geometry.nearest(160,new float[]{50,150,250})==1,"middle");check(Geometry.nearest(290,new float[]{50,150,250})==2,"right");
@@ -32,6 +32,10 @@ public final class GeometryTest {
   check(Geometry.dialIndex("9,898",1)==2,"formatted glyph index");
   close(Geometry.entryEase(0),0);close(Geometry.entryEase(1),1);
   float last=0;for(int n=0;n<=100;n++){float q=Geometry.entryEase(n/100f);check(q>=last&&q<=1,"smooth monotonic entry");last=q;}
+  close(Geometry.safeRadius(120,100,1),39);check(Geometry.safeRadius(60,60,1)>25,"larger compact key");
+  check(Geometry.horizontalDrag(30,5,8),"horizontal drag");check(!Geometry.horizontalDrag(5,30,8),"vertical ignored");check(!Geometry.horizontalDrag(5,0,8),"tap ignored");check(Geometry.horizontalDrag(-30,5,8),"reverse drag");
+  close(Geometry.tabOffset(100,80,-200,0,300),-100);close(Geometry.tabOffset(100,80,300,0,300),120);close(Geometry.tabOffset(100,80,30,0,300),30);
+  for(int w=10;w<=300;w+=10)for(int dx=-400;dx<=400;dx+=10){float start=(300-w)*.5f;float left=start+Geometry.tabOffset(start,w,dx,0,300);check(left>=-.001f&&left+w<=300.001f,"native indicator bounds");}
   System.out.println("Geometry checks passed: "+count);
  }
 }

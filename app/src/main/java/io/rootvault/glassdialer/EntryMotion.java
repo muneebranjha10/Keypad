@@ -26,7 +26,7 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
  private final ArrayList<Motion> active=new ArrayList<>();
  private static final long DURATION=210;
  private final TextPaint glyphPaint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
- private EntryMotion(EditText v){editor=v;v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
+ private EntryMotion(EditText v){editor=v;previous=Geometry.dialString(v.getText());v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
  static void attach(EditText v){if(instances.containsKey(v))return;EntryMotion m=new EntryMotion(v);instances.put(v,new WeakReference<>(m));}
  static void install()throws Exception {
   XposedBridge.hookMethod(android.widget.TextView.class.getDeclaredMethod("onDraw",Canvas.class),new XC_MethodHook(){
@@ -39,25 +39,25 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
    }
   });
  }
- @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){previous=Geometry.dialString(s);}
+ @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){}
  @Override public void onTextChanged(CharSequence s,int start,int before,int count){}
  @Override public void afterTextChanged(Editable e){
-  String now=Geometry.dialString(e);int ordinal=Geometry.insertedOrdinal(previous,now);
-  if(ordinal<0){if(!now.equals(previous))active.clear();editor.invalidate();return;}
-  if(!ValueAnimator.areAnimatorsEnabled()||!editor.isAttachedToWindow())return;
+  String now=Geometry.dialString(e);String old=previous;previous=now;if(now.equals(old))return;int ordinal=Geometry.insertedOrdinal(old,now);
+  if(ordinal<0){active.clear();editor.invalidate();return;}
+  if(!ValueAnimator.areAnimatorsEnabled()||!editor.isAttachedToWindow()){active.clear();return;}
   // Existing in-flight characters stay animated during fast taps. Shift their ordinals for middle insertion.
   for(Motion m:active)if(m.ordinal>=ordinal)m.ordinal++;
   active.add(new Motion(ordinal,now.charAt(ordinal),SystemClock.uptimeMillis()));
   while(active.size()>8)active.remove(0);
   editor.postInvalidateOnAnimation();
  }
- @Override public void onViewAttachedToWindow(View v){}
+ @Override public void onViewAttachedToWindow(View v){previous=Geometry.dialString(editor.getText());active.clear();}
  @Override public void onViewDetachedFromWindow(View v){active.clear();}
  private Frame prepare(Canvas c){
   if(active.isEmpty())return null;
   if(!ValueAnimator.areAnimatorsEnabled()){active.clear();return null;}
   long time=SystemClock.uptimeMillis();CharSequence text=editor.getText();Layout layout=editor.getLayout();
-  if(layout==null||text==null||layout.getText().length()!=text.length()||layout.getLineCount()==0){if(time-active.get(active.size()-1).start<DURATION)editor.postInvalidateOnAnimation();else active.clear();return null;}
+  if(layout==null||text==null||!android.text.TextUtils.equals(layout.getText(),text)||layout.getLineCount()==0){if(time-active.get(active.size()-1).start<DURATION)editor.postInvalidateOnAnimation();else active.clear();return null;}
   glyphPaint.set(editor.getPaint());glyphPaint.setColor(editor.getCurrentTextColor());glyphPaint.setTextAlign(Paint.Align.LEFT);
   ArrayList<Glyph> glyphs=new ArrayList<>();
   float px=editor.getCompoundPaddingLeft(),py=editor.getTotalPaddingTop(),dp=editor.getResources().getDisplayMetrics().density;
@@ -67,7 +67,7 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
    int index=Geometry.dialIndex(text,m.ordinal);
    if(index<0||text.charAt(index)!=m.digit){active.remove(i);continue;}
    int line=layout.getLineForOffset(index);
-   if(layout.getParagraphDirection(line)!=1||layout.getEllipsisCount(line)>0||layout.getLineForOffset(index+1)!=line){active.remove(i);continue;}
+   if(layout.getParagraphDirection(line)!=1||layout.getEllipsisCount(line)>0||layout.getLineForOffset(index+1)!=line||layout.isRtlCharAt(index)){active.remove(i);continue;}
    float l=layout.getPrimaryHorizontal(index),r=layout.getPrimaryHorizontal(index+1);
    if(!Float.isFinite(l)||!Float.isFinite(r)||r-l<1){active.remove(i);continue;}
    float q=Geometry.entryEase(Math.max(0,f));

@@ -36,11 +36,11 @@ public final class Hooks implements IXposedHookLoadPackage {
  @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p){
   if(!PKG.equals(p.packageName)||!PKG.equals(p.processName)||installed)return;installed=true;
   try{Amoled.install();}catch(Throwable t){log("AMOLED install failed: "+t);}
-  // Preserve Samsung native navigation; no custom slider hooks.
+  // Keep the stock Samsung tab visuals and add a scoped swipe gesture.
   Class<?> key=find(KEY,p.classLoader);
   if(key!=null&&ViewGroup.class.isAssignableFrom(key))try{installKey(key);log("keypad hooks installed");}catch(Throwable e){log("keypad hooks unavailable: "+e);}
   else log("keypad class missing; stock UI retained");
-  log("native Samsung tabs retained");
+  try{NativeTabs.install(p.classLoader);log("native Samsung tab drag installed");}catch(Throwable t){log("native tab drag unavailable: "+t);}
   try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
   try{EntryMotion.install();installEntry(p.classLoader);}catch(Throwable e){log("entry animation unavailable: "+e);}
  }
@@ -68,7 +68,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
   final java.lang.reflect.Field stockAnimation=nativeAnimator;
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v)||eraseKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
-  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null)try{Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning()){((android.animation.ValueAnimator)a).cancel();v.setScaleX(s.baseX);v.setScaleY(s.baseY);}}catch(Throwable ignored){}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
+  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){if(!s.captured||v.getBackground()!=s.wrapper)s.apply(v);if(v.getBackground()==s.wrapper&&!s.failed){if(stockAnimation!=null)try{Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning()){((android.animation.ValueAnimator)a).cancel();v.setScaleX(s.baseX);v.setScaleY(s.baseY);}}catch(Throwable ignored){}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
  }
  private static String idName(View v){int id=v.getId();if(id==View.NO_ID)return "";try{return v.getResources().getResourceEntryName(id);}catch(Throwable t){return "";}}
  private static boolean inDialpad(View v){View x=v;while(x!=null){if("keypad_fragment".equals(idName(x)))return true;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;}
@@ -119,7 +119,7 @@ public final class Hooks implements IXposedHookLoadPackage {
  private static void alignGrid(View source){
   if(!source.isAttachedToWindow()||source.getWidth()<=0||source.getHeight()<=0)return;
   float radius=Geometry.safeRadius(source.getWidth(),source.getHeight(),dp(source));ArrayList<KeyState> group=new ArrayList<>();
-  for(View v:new ArrayList<>(keys.keySet())){if(v==null||!v.isAttachedToWindow()||!v.isShown()||v.getWidth()<=0||v.getHeight()<=0||!sameGrid(source,v)&&v!=source)continue;KeyState s=keys.get(v);if(s==null)continue;group.add(s);radius=Math.min(radius,Geometry.safeRadius(v.getWidth(),v.getHeight(),dp(v)));}
+  for(View v:new ArrayList<>(keys.keySet())){if(v==null||!v.isAttachedToWindow()||!v.isShown()||v.getWidth()<=0||v.getHeight()<=0||!sameGrid(source,v)&&v!=source)continue;KeyState s=keys.get(v);if(s==null||s.failed||eraseKey(v))continue;group.add(s);radius=Math.min(radius,Geometry.safeRadius(v.getWidth(),v.getHeight(),dp(v)));}
   for(KeyState s:group)s.skin.radius(radius);
  }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
@@ -163,7 +163,7 @@ public final class Hooks implements IXposedHookLoadPackage {
     if(Math.abs(dy)<=root.getHeight()*.45f)t.setTranslationY(oy+dy);
    }
   }
-  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);
+  void apply(View v){if(failed||!v.isAttachedToWindow()||eraseKey(v))return;try{skin.dark(dark(v));discover(v);
    
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator recoil keypad active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}

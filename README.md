@@ -42,3 +42,6 @@ Clean number-only keypad: hide secondary text and known auxiliary icons visually
 
 ## v1.3
 Remove custom slider and all custom tab gesture hooks. Native Samsung tabs restored. Backspace uses native shape and stateful red icon tint plus red native ripple when present; no custom recoil, circle or glow animator. Individual digit entry uses direct glyph drawing at native layout position with smoothstep timing, no per-glyph saveLayer or Layout.draw. Native formatting, selection and number text remain unmodified. Actual smoothness and stock delete behavior require device verification.
+
+## v1.4
+Increase circle maximum diameter from 72dp to 78dp with adaptive bounds and glow margins. Keep native Samsung tab visual and click behavior; scoped horizontal drag translates the existing selected indicator if present, restores it and original clipping flags on release/cancel, then selects the destination via native click. If the indicator cannot be resolved, swipe-to-select on release still works. No custom glass drawable. Deduplicate formatted digit callbacks, cancel old animators on reduced-motion transition, cache glow shaders, avoid redundant key rebinding. Tests cover geometry and gesture thresholds, not device UI. Runtime appearance, native tab selection and 120 Hz require testing.
