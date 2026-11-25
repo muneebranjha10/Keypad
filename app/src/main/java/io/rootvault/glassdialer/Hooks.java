@@ -11,6 +11,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.TextView;
+import android.widget.ImageView;
 import android.animation.ArgbEvaluator;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
@@ -41,21 +42,47 @@ public final class Hooks implements IXposedHookLoadPackage {
   else log("keypad class missing; stock UI retained");
   if(tab!=null&&HorizontalScrollView.class.isAssignableFrom(tab))try{installTabs(tab);log("tab hooks installed");}catch(Throwable e){log("tab hooks unavailable: "+e);}
   else log("tab class missing; stock UI retained");
+  try{installDialpadDetails();}catch(Throwable e){log("dialpad detail hooks unavailable: "+e);}
  }
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
   XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("key press: "+t);}}});
  }
+ private static String idName(View v){int id=v.getId();if(id==View.NO_ID)return "";try{return v.getResources().getResourceEntryName(id);}catch(Throwable t){return "";}}
+ private static boolean inDialpad(View v){View x=v;while(x!=null){if("keypad_fragment".equals(idName(x)))return true;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;}
+ private static boolean eraseKey(View v){String name=idName(v);return ("delete_button".equals(name)||"dialpad_delete_button".equals(name)||"dialpad_widget_key_delete_button_china".equals(name))&&inDialpad(v);}
+ private static boolean blackSurface(View v){String n=idName(v);return "keypad_fragment".equals(n)||"keypad_view".equals(n)||"dialpad_container".equals(n)||"dialpad_search_list_view".equals(n)||"toggle_container".equals(n)||"input_number_container".equals(n);}
+ private static final WeakHashMap<View,Drawable> surfaces=new WeakHashMap<>();
+ private static void black(View v){if(!blackSurface(v)||!inDialpad(v))return;if(dark(v)){if(!surfaces.containsKey(v))surfaces.put(v,v.getBackground());if(!(v.getBackground() instanceof android.graphics.drawable.ColorDrawable)||((android.graphics.drawable.ColorDrawable)v.getBackground()).getColor()!=Color.BLACK){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundColor(Color.BLACK);v.setPaddingRelative(a,b,c,d);}}else if(surfaces.containsKey(v)){Drawable old=surfaces.remove(v);int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(old);v.setPaddingRelative(a,b,c,d);}}
+ private static void installDialpadDetails()throws Exception {
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v)){KeyState s=keys.get(v);if(s==null){s=new KeyState(v);s.skin.erase(true);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);}s.apply(v);}}catch(Throwable t){log("dialpad detail: "+t);}}});
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
+ }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
-  final Visuals.Key skin; final RippleDrawable wrapper; Drawable stock; ColorStateList stockTint; boolean failed,reported,captured;
+  final Visuals.Key skin;final RippleDrawable wrapper;final WeakReference<View> view;
+  Drawable stock;ColorStateList stockTint;boolean failed,reported,captured;
+  float baseX=1,baseY=1;
   final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
+  final WeakHashMap<ImageView,ColorStateList> icons=new WeakHashMap<>();
   final ArgbEvaluator evaluator=new ArgbEvaluator();
-  KeyState(View v){skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintLabels;}
-  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if(s.matches("[0-9*#＊＃]")&&!labels.containsKey(t))labels.put(t,t.getTextColors());}if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
-  void paintLabels(){for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;ColorStateList base=labels.get(t);if(base==null)continue;if(skin.glow<=.001f){if(t.getTextColors()!=base)t.setTextColor(base);}else {int a=base.getDefaultColor(),b=skin.dark?0xff63d7ca:0xff087c70;int c=(int)evaluator.evaluate(skin.glow,a,b);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}}}
-  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator key material v2 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);paintLabels();}catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();labels.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;}
+  KeyState(View v){view=new WeakReference<>(v);skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintFrame;}
+  void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();if(s.matches("[0-9*#＊＃]")&&!labels.containsKey(t))labels.put(t,t.getTextColors());}
+   if(skin.erase&&v instanceof ImageView){ImageView i=(ImageView)v;if(!icons.containsKey(i))icons.put(i,i.getImageTintList());}
+   if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
+  void paintFrame(){View v=view.get();if(v==null)return;
+   // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
+   float width=Math.max(1,Math.min(v.getWidth(),v.getHeight()));
+   float scale=1-Visuals.clamp(3*dp(v)/width,0,.09f)*skin.recoil;
+   v.setScaleX(baseX*scale);v.setScaleY(baseY*scale);
+   for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;int from=skin.dark?0xfffcfcff:0xff3a3a3d,to=0xff41c19f;
+    int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
+   if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
+  }
+  void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);
+   if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log(skin.erase?"calculator red delete feedback active":"calculator recoil keypad v3 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);paintFrame();
+  }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
+  void restore(View v){skin.stop();for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}v.setScaleX(baseX);v.setScaleY(baseY);captured=false;}
   @Override public void onViewAttachedToWindow(View v){apply(v);}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);}

@@ -1,4 +1,4 @@
-# Glass Dialer 0.2 Beta
+# Glass Dialer 0.3 Beta
 Experimental LSPosed module for Samsung Phone. Calculator-style glowing number keys and translucent draggable navigation capsule for Keypad, Recents and Contacts. Based on class names from the supplied Samsung Dialer APK. This is a custom glass approximation, not true optical refraction or a copy of proprietary calculator rendering.
 
 ## Install
@@ -9,3 +9,6 @@ GitHub Actions runs assembleDebug using Java 17, Gradle 8.11.1 and Android SDK 3
 
 ## v0.2
 Based on the user's recorded comparison: calculator-dark key surfaces, diffuse green/cyan halo without bright outline, fixed teal digit feedback, and a neutral silver glass tab material with smoother stretch and snap. Native tab actions and labels are preserved. No true background refraction. Runtime validation pending.
+
+## v0.3 – calculator material
+Uses original APK resource palette: calc_keypad_number_button_bg, keypad_number, keypad_number_gradient_normal, keypad_normal_gradient_start/end, keypad_clear and keypad_clear_gradient_start/end. Samsung SeslRecoilAnimator DEX specifies 100 ms press, 350 ms release and 3 dp scale amount. The glow and interpolators are recreated, not the original Samsung renderer. Dark mode targeted keypad backgrounds are #000000. Confirm black surface, delete hook and native dial behavior on device. Reduced slider contrast.

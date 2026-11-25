@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'io.rootvault.glassdialer'
  compileSdk 35
- defaultConfig { applicationId 'io.rootvault.glassdialer'; minSdk 31; targetSdk 35; versionCode 2; versionName '0.2-beta' }
+ defaultConfig { applicationId 'io.rootvault.glassdialer'; minSdk 31; targetSdk 35; versionCode 3; versionName '0.3-beta' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 dependencies { compileOnly project(':api-stubs') }
