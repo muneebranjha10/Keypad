@@ -11,7 +11,8 @@ import android.widget.TextView;
 import android.widget.EditText;
 import android.graphics.Rect;
 import android.graphics.Canvas;
-import java.util.IdentityHashMap;
+import android.graphics.Typeface;
+import android.provider.Settings;
 import android.widget.ImageView;
 import android.animation.ArgbEvaluator;
 import java.lang.ref.WeakReference;
@@ -52,20 +53,9 @@ public final class Hooks implements IXposedHookLoadPackage {
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{attachEntry((EditText)p.thisObject);}catch(Throwable t){log("entry init: "+t);}}});
  }
  private static void attachEntry(EditText e){if(entryViews.containsKey(e))return;EntryMotion.attach(e);entryViews.put(e,true);log("native number-line animation attached");}
- private static Method drawMethod(Class<?> c)throws Exception {
-  for(Class<?> type=c;type!=null;type=type.getSuperclass()){try{return declared(type,"dispatchDraw",Canvas.class);}catch(NoSuchMethodException ignored){}}
-  throw new NoSuchMethodException("dispatchDraw");
- }
- private static void installLabelRecoil(Class<?> c)throws Exception {
-  final ThreadLocal<IdentityHashMap<XC_MethodHook.MethodHookParam,Integer>> frames=new ThreadLocal<>();
-  XposedBridge.hookMethod(drawMethod(c),new XC_MethodHook(){
-   @Override protected void beforeHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null||s.failed||!s.captured||v.getBackground()!=s.wrapper)return;float scale=Geometry.recoilScale(s.skin.recoil);if(Math.abs(scale-1)<.001f)return;Canvas canvas=(Canvas)p.args[0];IdentityHashMap<XC_MethodHook.MethodHookParam,Integer> map=frames.get();if(map==null){map=new IdentityHashMap<>();frames.set(map);}int saved=canvas.save();map.put(p,saved);canvas.scale(scale,scale,v.getWidth()*.5f,v.getHeight()*.5f);}catch(Throwable t){log("label recoil: "+t);}}
-   @Override protected void afterHookedMethod(MethodHookParam p){IdentityHashMap<XC_MethodHook.MethodHookParam,Integer> map=frames.get();if(map==null)return;Integer saved=map.remove(p);if(map.isEmpty())frames.remove();if(saved!=null)try{((Canvas)p.args[0]).restoreToCount(saved);}catch(Throwable ignored){}}
-  });
- }
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
-  try{installLabelRecoil(c);}catch(Throwable t){log("label recoil unavailable: "+t);}
+  // Glyph and circle now share a single drawable and transform; no child-canvas scaling hook.
   java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
   final java.lang.reflect.Field stockAnimation=nativeAnimator;
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v)||eraseKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
@@ -124,12 +114,12 @@ public final class Hooks implements IXposedHookLoadPackage {
   // The APK uses a generic image resource for voicemail; suppress only its drawing under key 1.
   XposedBridge.hookMethod(ViewGroup.class.getDeclaredMethod("drawChild",Canvas.class,View.class,long.class),new XC_MethodHook(){
    @Override protected void beforeHookedMethod(MethodHookParam p){
-    try{View child=(View)p.args[1];if(!(child instanceof ImageView))return;
-     String name=idName(child);if(!Geometry.oneHintId(name))return;
+    try{View child=(View)p.args[1];boolean label=child instanceof TextView, image=child instanceof ImageView;if(!label&&!image)return;
+     String name=idName(child);if(image&&!Geometry.oneHintId(name))return;
      View root=(View)p.thisObject;
      for(int depth=0;root!=null&&depth<8;depth++){
       KeyState state=keys.get(root);
-      if(state!=null){if(state.captured&&!state.failed&&oneKey(root))p.setResult(false);return;}
+      if(state!=null){if(state.captured&&!state.failed&&root.getBackground()==state.wrapper){if(image&&oneKey(root))p.setResult(false);if(label&&state.skin.digit!=null&&state.digitAlphas.containsKey(child)&&state.primaryLabel((TextView)child))p.setResult(false);}return;}
       android.view.ViewParent parent=root.getParent();root=parent instanceof View?(View)parent:null;
      }
     }catch(Throwable ignored){}
@@ -143,7 +133,7 @@ public final class Hooks implements IXposedHookLoadPackage {
   if(!source.isAttachedToWindow()||source.getWidth()<=0||source.getHeight()<=0)return;
   float radius=Geometry.safeRadius(source.getWidth(),source.getHeight(),dp(source));ArrayList<KeyState> group=new ArrayList<>();
   for(View v:new ArrayList<>(keys.keySet())){if(v==null||!v.isAttachedToWindow()||!v.isShown()||v.getWidth()<=0||v.getHeight()<=0||!sameGrid(source,v)&&v!=source)continue;KeyState s=keys.get(v);if(s==null||s.failed||eraseKey(v))continue;group.add(s);radius=Math.min(radius,Geometry.safeRadius(v.getWidth(),v.getHeight(),dp(v)));}
-  for(KeyState s:group)s.skin.radius(radius);
+  for(KeyState s:group){s.skin.radius(radius);s.skin.warm();}
  }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
   final Visuals.Key skin;final RippleDrawable wrapper;final WeakReference<View> view;
@@ -152,13 +142,15 @@ public final class Hooks implements IXposedHookLoadPackage {
   final WeakHashMap<View,Float> labelOffsets=new WeakHashMap<>(),labelY=new WeakHashMap<>(),hiddenHints=new WeakHashMap<>();
   final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
   final ArgbEvaluator evaluator=new ArgbEvaluator();
+  final WeakHashMap<TextView,Float> digitAlphas=new WeakHashMap<>();
+  Typeface calcFont;boolean fontBold;
   KeyState(View v){view=new WeakReference<>(v);skin=new Visuals.Key(dp(v),dark(v));wrapper=new RippleDrawable(ColorStateList.valueOf(Color.TRANSPARENT),skin,null);skin.frame=this::paintFrame;}
   boolean primaryLabel(TextView t){String s=t.getText()==null?"":t.getText().toString().trim();return "dialpad_key_number".equals(idName(t))||s.matches("[0-9*#＊＃]")||(s.length()==1&&Character.isDigit(s.charAt(0)));}
   void hideHint(View v){if(!hiddenHints.containsKey(v))hiddenHints.put(v,v.getAlpha());if(v.getAlpha()!=0f)v.setAlpha(0f);}
   void discover(View v){if(v instanceof TextView){TextView t=(TextView)v;String s=t.getText()==null?"":t.getText().toString().trim();{if(primaryLabel(t)){if(hiddenHints.containsKey(t)){t.setAlpha(hiddenHints.remove(t));}if(!labels.containsKey(t))labels.put(t,t.getTextColors());}else if(!s.isEmpty()){hideHint(t);}}}
    if(v instanceof ImageView){String n=idName(v);View root=view.get();if(n.contains("voicemail")||n.contains("letter")||n.contains("sub_")||(root!=null&&oneKey(root)&&Geometry.oneHintId(n)))hideHint(v);}
    if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)discover(g.getChildAt(i));}}
-  void paintFrame(){View v=view.get();if(v==null||!captured)return;
+  void paintFrame(){View v=view.get();if(v==null||!captured)return;if(skin.digit!=null)return;
    // Samsung calculator recoil moves 3 dp relative to key width. Do not alter layout or hit listeners.
    // The drawable performs recoil; keep the touch receiver and its clipping bounds fixed.
    // Invalidate the full view to refresh the matching child draw transform. Hit bounds stay fixed.
@@ -167,30 +159,24 @@ public final class Hooks implements IXposedHookLoadPackage {
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
   }
   void resetAlignment(){for(View t:new ArrayList<>(labelOffsets.keySet()))if(t!=null){Float x=labelOffsets.get(t),y=labelY.get(t);if(x!=null)t.setTranslationX(x);if(y!=null)t.setTranslationY(y);}labelOffsets.clear();labelY.clear();}
+  void restoreDigits(){for(TextView t:new ArrayList<>(digitAlphas.keySet()))if(t!=null){Float alpha=digitAlphas.get(t);if(alpha!=null)t.setAlpha(alpha);}digitAlphas.clear();skin.setDigit(null,null,0,0);}
   void alignLabels(View root){
    if(root.getWidth()<=0||root.getHeight()<=0)return;
-   for(TextView t:new ArrayList<>(labels.keySet())){
-    if(t==null||!primaryLabel(t)||t.getWidth()<=0||t.getHeight()<=0||!t.isShown())continue;
-    android.text.Layout layout=t.getLayout();if(layout==null||layout.getLineCount()==0)continue;
-    float x=t.getLeft(),y=t.getTop();android.view.ViewParent parent=t.getParent();
-    while(parent instanceof View&&parent!=root){View p=(View)parent;x+=p.getLeft()+p.getTranslationX()-p.getScrollX();y+=p.getTop()+p.getTranslationY()-p.getScrollY();parent=p.getParent();}
-    if(parent!=root)continue;
-    if(!labelOffsets.containsKey(t)){labelOffsets.put(t,t.getTranslationX());labelY.put(t,t.getTranslationY());}
-    float ox=labelOffsets.get(t),oy=labelY.get(t);
-    String digit=t.getText().toString();Rect ink=new Rect();t.getPaint().getTextBounds(digit,0,digit.length(),ink);
-    float centerX=x+ox+t.getCompoundPaddingLeft()+(layout.getLineLeft(0)+layout.getLineRight(0))*.5f;
-    float centerY=y+oy+t.getTotalPaddingTop()+layout.getLineBaseline(0)+(ink.top+ink.bottom)*.5f;
-    float dx=root.getWidth()*.5f-centerX,dy=root.getHeight()*.5f-centerY;
-    // Adjust only a verified digit; leave native sizing and touch area intact.
-    if(Math.abs(dx)<=root.getWidth()*.45f)t.setTranslationX(ox+dx);
-    if(Math.abs(dy)<=root.getHeight()*.45f)t.setTranslationY(oy+dy);
-   }
+   TextView selected=null;
+   for(TextView t:new ArrayList<>(labels.keySet())){if(t==null||!primaryLabel(t)||!t.isShown()||t.getText()==null)continue;String s=t.getText().toString().trim();if(s.length()!=1||!(Character.isDigit(s.charAt(0))||"*#＊＃".indexOf(s.charAt(0))>=0))continue;if(selected!=null&&!selected.getText().toString().trim().equals(s)){restoreDigits();return;}selected=t;}
+   if(selected==null){restoreDigits();return;}
+   boolean bold=Settings.Global.getInt(root.getContext().getContentResolver(),"bold_text",0)==1;
+   if(calcFont==null||fontBold!=bold){fontBold=bold;Typeface base=Typeface.create("sec",Typeface.NORMAL);calcFont=Typeface.create(base,300,false);if(bold)calcFont=Typeface.create(calcFont,Typeface.BOLD);}
+   ColorStateList original=labels.get(selected);int color=original==null?(dark(root)?Color.WHITE:0xff222222):original.getColorForState(selected.getDrawableState(),original.getDefaultColor());
+   skin.setDigit(selected.getText().toString().trim(),calcFont,color,root.isEnabled()&&selected.isEnabled()?1f:0f);
+   if(skin.digit==null){restoreDigits();return;}
+   for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&primaryLabel(t)){if(!digitAlphas.containsKey(t))digitAlphas.put(t,t.getAlpha());if(t.getAlpha()!=0)t.setAlpha(0f);}
   }
   void apply(View v){if(failed||!v.isAttachedToWindow()||eraseKey(v))return;try{skin.dark(dark(v));discover(v);
    
-   if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator recoil keypad active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);paintFrame();
+   if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log("calculator recoil keypad active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);alignLabels(v);skin.warm();paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();resetAlignment();for(View h:new ArrayList<>(hiddenHints.keySet()))if(h!=null)h.setAlpha(hiddenHints.get(h));hiddenHints.clear();for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));labels.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
+  void restore(View v){skin.stop();restoreDigits();resetAlignment();for(View h:new ArrayList<>(hiddenHints.keySet()))if(h!=null)h.setAlpha(hiddenHints.get(h));hiddenHints.clear();for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));labels.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}captured=false;stock=null;stockTint=null;}
   @Override public void onViewAttachedToWindow(View v){apply(v);v.post(()->{if(v.isAttachedToWindow()){apply(v);alignGrid(v);}});}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);alignGrid(v);}

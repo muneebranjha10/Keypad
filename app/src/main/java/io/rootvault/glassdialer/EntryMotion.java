@@ -24,7 +24,8 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
  private final EditText editor;
  private String previous="";
  private final ArrayList<Motion> active=new ArrayList<>();
- private static final long DURATION=210;
+ private static final long DURATION=250;
+ private static final android.view.animation.PathInterpolator CALC_EASE=new android.view.animation.PathInterpolator(.22f,.25f,0f,1f);
  private final TextPaint glyphPaint=new TextPaint(Paint.ANTI_ALIAS_FLAG);
  private EntryMotion(EditText v){editor=v;previous=Geometry.dialString(v.getText());v.addTextChangedListener(this);v.addOnAttachStateChangeListener(this);}
  static void attach(EditText v){WeakReference<EntryMotion> existing=instances.get(v);if(existing!=null&&existing.get()!=null)return;EntryMotion m=new EntryMotion(v);instances.put(v,new WeakReference<>(m));}
@@ -70,10 +71,10 @@ final class EntryMotion implements TextWatcher,View.OnAttachStateChangeListener 
    if(layout.getParagraphDirection(line)!=1||layout.getEllipsisCount(line)>0||layout.getLineForOffset(index+1)!=line||layout.isRtlCharAt(index)){active.remove(i);continue;}
    float l=layout.getPrimaryHorizontal(index),r=layout.getPrimaryHorizontal(index+1);
    if(!Float.isFinite(l)||!Float.isFinite(r)||r-l<1){active.remove(i);continue;}
-   float q=Geometry.entryEase(Math.max(0,f));
+   float q=CALC_EASE.getInterpolation(Math.max(0,f));
    // Layout's actual glyph cell: preserve other digits and cursor at their native positions.
    RectF box=new RectF(px+l,py+layout.getLineTop(line),px+r,py+layout.getLineBottom(line));
-   glyphs.add(new Glyph(box,text.charAt(index),px+l,py+layout.getLineBaseline(line),Math.min(7*dp,(r-l)*.36f)*(1-q),Math.round(glyphPaint.getAlpha()*(.38f+.62f*q))));
+   glyphs.add(new Glyph(box,text.charAt(index),px+l,py+layout.getLineBaseline(line),Math.min(5*dp,(r-l)*.23f)*(1-q),Math.round(glyphPaint.getAlpha()*(.38f+.62f*q))));
   }
   if(!active.isEmpty())editor.postInvalidateOnAnimation();
   if(glyphs.isEmpty())return null;

@@ -19,7 +19,12 @@ final class Visuals {
   void stroke(Canvas c,RectF r,float radius,Shader s,float width){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(width);p.setColor(Color.WHITE);p.setShader(s);c.drawRoundRect(r,radius,radius,p);p.setShader(null);p.setStyle(Paint.Style.FILL);}
  }
  static final class Key extends Skin {
-  float glow=0,recoil=0; ValueAnimator anim,motion; boolean pressed;
+  float glow=0,recoil=0; ValueAnimator anim; boolean pressed;
+  final Paint digitPaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.SUBPIXEL_TEXT_FLAG);final Rect digitInk=new Rect(),referenceInk=new Rect();
+  String digit;Typeface digitFont;int digitColor;float digitEnabled,digitRadius=Float.NaN;
+  void setDigit(String value,Typeface font,int color,float enabled){if(java.util.Objects.equals(digit,value)&&digitFont==font&&digitColor==color&&digitEnabled==enabled)return;digit=value;digitFont=font;digitColor=color;digitEnabled=enabled;digitRadius=Float.NaN;invalidateSelf();}
+  void prepareDigit(float radius){if(digit==null||digitFont==null||digitRadius==radius)return;digitRadius=radius;digitPaint.setTypeface(digitFont);digitPaint.setTextAlign(Paint.Align.LEFT);digitPaint.setTextSize(32*dp);digitPaint.getTextBounds("8",0,1,referenceInk);if(referenceInk.height()>0)digitPaint.setTextSize(32*dp*Geometry.glyphHeight(radius)/referenceInk.height());digitPaint.getTextBounds(digit,0,digit.length(),digitInk);}
+  void drawDigit(Canvas c,float x,float y,float radius){if(digit==null||digitFont==null)return;prepareDigit(radius);int color=digitColor;if(digitEnabled>0){int r=Math.round(Color.red(color)+(153-Color.red(color))*glow),g=Math.round(Color.green(color)+(222-Color.green(color))*glow),b=Math.round(Color.blue(color)+(210-Color.blue(color))*glow);color=Color.argb(Color.alpha(color),r,g,b);}digitPaint.setColor(color);c.drawText(digit,x-(digitInk.left+digitInk.right)*.5f,y-(digitInk.top+digitInk.bottom)*.5f,digitPaint);}
   Runnable frame;
   final Paint bitmapPaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
   Bitmap halo; int haloSize; float haloRadius,commonRadius;
@@ -29,20 +34,16 @@ final class Visuals {
   Key(float dp,boolean dark){super(dp,dark);}
   void change(){invalidateSelf();if(frame!=null)frame.run();}
   void press(boolean down){if(pressed==down)return;pressed=down;
-   if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();motion=null;}
+   if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();anim=null;}
    if(!ValueAnimator.areAnimatorsEnabled()){glow=down?1:0;recoil=0;change();return;}
-   float start=glow;
-   // Keep very short taps visible, even if released before the next display frame.
-   if(down){anim=ValueAnimator.ofFloat(start,1f);anim.setDuration(100);}
-   else if(start<.35f){anim=ValueAnimator.ofFloat(Math.max(start,.25f),.75f,0f);anim.setDuration(350);}
-   else {anim=ValueAnimator.ofFloat(start,0f);anim.setDuration(350);}
-   anim.setInterpolator(down?new PathInterpolator(.22f,0f,.25f,1f):new PathInterpolator(.18f,.55f,.24f,1f));
-   anim.addUpdateListener(a->{glow=(float)a.getAnimatedValue();change();});anim.start();
-   motion=down?ValueAnimator.ofFloat(recoil,1f):(recoil<.35f?ValueAnimator.ofFloat(Math.max(.25f,recoil),.75f,0f):ValueAnimator.ofFloat(recoil,0f));motion.setDuration(down?100:350);
-   motion.setInterpolator(down?new PathInterpolator(.25f,0f,.25f,1f):new PathInterpolator(.18f,.86f,.24f,1.24f));
-   motion.addUpdateListener(a->{recoil=(float)a.getAnimatedValue();change();});motion.start();
+   final float g=glow,r=recoil;final boolean quick=!down&&Math.max(g,r)<.35f;
+   anim=ValueAnimator.ofFloat(0f,1f);anim.setDuration(down?100:350);anim.setInterpolator(new android.view.animation.LinearInterpolator());
+   anim.addUpdateListener(a->{float t=(float)a.getAnimatedValue();glow=Geometry.keyGlow(g,t,down,quick);recoil=Geometry.keyRecoil(r,t,down,quick);change();});
+   anim.start();
   }
-  void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}if(motion!=null){motion.removeAllUpdateListeners();motion.cancel();}anim=motion=null;pressed=false;glow=recoil=0;halo=null;change();}
+  void stop(){if(anim!=null){anim.removeAllUpdateListeners();anim.cancel();}anim=null;pressed=false;glow=recoil=0;halo=null;change();}
+  float currentRadius(){Rect b=getBounds();return Math.min(Geometry.safeRadius(b.width(),b.height(),dp),commonRadius>0?commonRadius:39*dp);}
+  void warm(){Rect b=getBounds();float available=Math.min(b.width(),b.height()),radius=currentRadius();if(available<8||radius<1)return;prepareDigit(radius);prepareShaders(b.exactCenterX(),b.exactCenterY(),radius);prepareHalo(Math.max(8,(int)Math.floor(Math.min(available/1.02f,2*(radius+4*dp)))),radius);}
   void prepareHalo(int size,float radius){
    if(halo!=null&&haloSize==size&&Math.abs(haloRadius-radius)<.5f)return;
    haloSize=size;haloRadius=radius;int pixels=Math.min(512,size);halo=Bitmap.createBitmap(pixels,pixels,Bitmap.Config.ARGB_8888);
@@ -60,9 +61,9 @@ final class Visuals {
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
-   float radius=Math.min(Geometry.safeRadius(b.width(),b.height(),dp),commonRadius>0?commonRadius:39*dp);
+   float radius=currentRadius();
    if(radius<1)return;
-   int checkpoint=c.save();float scale=Geometry.recoilScale(recoil);c.scale(scale,scale,x,y);
+   int checkpoint=c.save();float scale=Geometry.calculatorRecoilScale(recoil,radius,dp);c.scale(scale,scale,x,y);
    int base=dark?0xff171717:0xfffcfcff;
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
@@ -76,7 +77,7 @@ final class Visuals {
     bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
     r.set(x-size*.5f,y-size*.5f,x+size*.5f,y+size*.5f);c.drawBitmap(halo,null,r,bitmapPaint);
    }
-   p.setAlpha(255);c.restoreToCount(checkpoint);
+   p.setAlpha(255);drawDigit(c,x,y,radius);c.restoreToCount(checkpoint);
   }
  }
 }

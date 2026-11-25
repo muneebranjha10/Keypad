@@ -38,6 +38,8 @@ public final class GeometryTest {
   for(int w=10;w<=300;w+=10)for(int dx=-400;dx<=400;dx+=10){float start=(300-w)*.5f;float left=start+Geometry.tabOffset(start,w,dx,0,300);check(left>=-.001f&&left+w<=300.001f,"native indicator bounds");}
   check(Geometry.oneKeyId("one"),"native one id");check(Geometry.oneKeyId("dialpad_key_1_layout"),"alternate one id");check(!Geometry.oneKeyId("two"),"not other keys");
   check(Geometry.oneHintId("dialpad_key_image"),"generic voicemail icon");check(Geometry.oneHintId("dialpad_key_1_letter_text_view"),"alternate voicemail icon");check(Geometry.oneHintId(""),"idless inflated image");check(!Geometry.oneHintId("delete_button_image"),"never hide backspace");check(!Geometry.oneHintId("dialpad_key_number"),"never hide digit");
+  close(Geometry.glyphHeight(68),45.56f);close(Geometry.calculatorRecoilScale(1,39,1),1-3f/39);close(Geometry.calculatorRecoilScale(0,39,1),1);
+  for(boolean quick:new boolean[]{false,true}){close(Geometry.keyGlow(.1f,0,false,quick),.1f);close(Geometry.keyGlow(.1f,1,false,quick),0);close(Geometry.keyRecoil(.1f,0,false,quick),.1f);close(Geometry.keyRecoil(.1f,1,false,quick),0);for(int z=0;z<=100;z++){float t=z/100f,g=Geometry.keyGlow(.1f,t,false,quick),r=Geometry.keyRecoil(.1f,t,false,quick);check(g>=0&&g<=1&&r>=-.15f&&r<=1,"continuous key animation bounds");}}
   System.out.println("Geometry checks passed: "+count);
  }
 }
