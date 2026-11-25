@@ -46,28 +46,31 @@ final class Visuals {
    Canvas c=new Canvas(halo);float center=size*.5f;
    int first=erase?0xfffce0ff:0xffc7f9b3,end=erase?0xffffc8c8:0xff99ded2;
    Paint q=new Paint(Paint.ANTI_ALIAS_FLAG);
-   q.setShader(new SweepGradient(center,center,new int[]{end,end,first,first,end},new float[]{0,.20f,.49f,.72f,1}));
-   c.drawCircle(center,center,size*.5f,q);
-   q.setShader(new RadialGradient(center,center,size*.5f,new int[]{0x00000000,0x00000000,0xa0000000,0x6a000000,0x18000000,0x00000000},
-    new float[]{0,Math.max(.1f,radius/center-.16f),radius/center,Math.min(.94f,radius/center+.075f),.96f,1},Shader.TileMode.CLAMP));
-   q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawCircle(center,center,size*.5f,q);
+   q.setShader(new LinearGradient(0,0,size,size,new int[]{first,end},null,Shader.TileMode.CLAMP));
+   c.drawCircle(center,center,center,q);
+   float edge=Math.min(.91f,radius/center);
+   q.setShader(new RadialGradient(center,center,center,new int[]{0x08000000,0x14000000,0x35000000,0x79000000,0x43000000,0x00000000},
+    new float[]{0,.48f,edge*.78f,edge,Math.min(.97f,edge+.05f),1},Shader.TileMode.CLAMP));
+   q.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));c.drawCircle(center,center,center,q);
   }
   @Override public void draw(Canvas c){
    Rect b=getBounds();float x=b.exactCenterX(),y=b.exactCenterY(),available=Math.min(b.width(),b.height());
    if(available<8)return;
-   float radius=Math.min(available*.415f,43*dp);
+   float radius=Math.min(available*.445f,46*dp);
    int base=dark?0xff171717:0xfffcfcff;
-   if(glow>.002f){
-    int size=Math.max(8,(int)Math.min(available,2*(radius+8*dp)));
-    prepareHalo(size,radius);
-    bitmapPaint.setAlpha(Math.round(220*clamp(glow,0,1)));c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
-   }
    p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(base);c.drawCircle(x,y,radius,p);
    if(glow>.002f){
     int a=erase?0xff493538:0xff344334,mid=erase?0xff34272d:0xff2b342b,end=erase?0xff2d2528:0xff253332;
     p.setColor(Color.WHITE);p.setShader(new LinearGradient(x-radius,y-radius,x+radius,y+radius,new int[]{a,mid,end},null,Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
     p.setColor(Color.WHITE);p.setShader(new RadialGradient(x,y,radius,new int[]{0x00000000,0x00000000,0x31000000,0x61000000},new float[]{0,.58f,.90f,1},Shader.TileMode.CLAMP));p.setAlpha(Math.round(255*glow));c.drawCircle(x,y,radius,p);p.setShader(null);
-   }p.setAlpha(255);
+   }
+   if(glow>.002f){
+    int size=Math.max(8,(int)available);
+    prepareHalo(size,radius);
+    bitmapPaint.setAlpha(Math.round(255*clamp(glow,0,1)));
+    c.drawBitmap(halo,x-size*.5f,y-size*.5f,bitmapPaint);
+   }
+   p.setAlpha(255);
   }
  }
  static final class Tabs extends Skin {
@@ -88,15 +91,15 @@ final class Visuals {
   @Override public void draw(Canvas c){
    Rect b=getBounds();if(b.width()<4||b.height()<4)return;
    float inset=.75f*dp;r.set(b.left+inset,b.top+inset,b.right-inset,b.bottom-inset);float rad=r.height()/2;
-   shade(c,r,rad,new LinearGradient(0,r.top,0,r.bottom,dark?new int[]{0xff232426,0xff141517,0xff191a1c}:new int[]{0xfffafbfc,0xffe4e7ec,0xfff1f3f6},new float[]{0,.53f,1},Shader.TileMode.CLAMP));
-   stroke(c,r,rad,new LinearGradient(r.left,r.top,r.right,r.bottom,dark?new int[]{0x59ffffff,0x12ffffff,0x33ffffff}:new int[]{0xffffffff,0x40828b96,0xaaffffff},new float[]{0,.50f,1},Shader.TileMode.CLAMP),.85f*dp);
+   shade(c,r,rad,new LinearGradient(0,r.top,0,r.bottom,dark?new int[]{0xff222222,0xff1c1c1c,0xff202020}:new int[]{0xfffafbfc,0xffe4e7ec,0xfff1f3f6},new float[]{0,.53f,1},Shader.TileMode.CLAMP));
+   stroke(c,r,rad,new LinearGradient(r.left,r.top,r.right,r.bottom,dark?new int[]{0x21ffffff,0x08ffffff,0x17ffffff}:new int[]{0xffffffff,0x40828b96,0xaaffffff},new float[]{0,.50f,1},Shader.TileMode.CLAMP),.85f*dp);
    if(!Float.isFinite(left)||right<=left)return;
    float pad=3*dp;t.set(Math.max(r.left+pad,b.left+left+pad-stretch),r.top+pad-(lift*.45f*dp),Math.min(r.right-pad,b.left+right-pad+stretch),r.bottom-pad+(lift*.45f*dp));if(t.width()<2||t.height()<2)return;float tr=Math.min(t.width(),t.height())*.5f;
-   shade(c,t,tr,new LinearGradient(0,t.top,0,t.bottom,dark?new int[]{0xff4b4d50,0xff2f3033,0xff28292b,0xff383a3c}:new int[]{0xfffefefe,0xffe0e4e8,0xffd0d5dc,0xfff7f8fa},new float[]{0,.36f,.72f,1},Shader.TileMode.CLAMP));
-   shade(c,t,tr,new RadialGradient(t.left+t.width()*.18f,t.top,t.width()*.75f,new int[]{0x58ffffff,0x00ffffff},null,Shader.TileMode.CLAMP));
-   stroke(c,t,tr,new LinearGradient(t.left,t.top,t.right,t.bottom,new int[]{0xb0ffffff,0x18ffffff,0x59ffffff},new float[]{0,.51f,1},Shader.TileMode.CLAMP),1.1f*dp);
+   shade(c,t,tr,new LinearGradient(0,t.top,0,t.bottom,dark?new int[]{0xff494949,0xff353535,0xff303030,0xff3b3b3b}:new int[]{0xfffefefe,0xffe0e4e8,0xffd0d5dc,0xfff7f8fa},new float[]{0,.36f,.72f,1},Shader.TileMode.CLAMP));
+   shade(c,t,tr,new RadialGradient(t.left+t.width()*.18f,t.top,t.width()*.75f,new int[]{0x22ffffff,0x00ffffff},null,Shader.TileMode.CLAMP));
+   stroke(c,t,tr,new LinearGradient(t.left,t.top,t.right,t.bottom,new int[]{0x58ffffff,0x12ffffff,0x24ffffff},new float[]{0,.51f,1},Shader.TileMode.CLAMP),1.1f*dp);
    inner.set(t);inner.inset(1.6f*dp,1.6f*dp);
-   if(inner.width()>0&&inner.height()>0)stroke(c,inner,Math.min(inner.width(),inner.height())/2,new LinearGradient(0,inner.top,0,inner.bottom,new int[]{0x4cffffff,0x00ffffff,0x35ffffff},new float[]{0,.5f,1},Shader.TileMode.CLAMP),.6f*dp);
+   if(inner.width()>0&&inner.height()>0)stroke(c,inner,Math.min(inner.width(),inner.height())/2,new LinearGradient(0,inner.top,0,inner.bottom,new int[]{0x12ffffff,0x00ffffff,0x09ffffff},new float[]{0,.5f,1},Shader.TileMode.CLAMP),.6f*dp);
   }
  }
 }

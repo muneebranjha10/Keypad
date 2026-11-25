@@ -46,23 +46,32 @@ public final class Hooks implements IXposedHookLoadPackage {
  }
  private static void installKey(Class<?> c)throws Exception {
   Method pressed=declared(c,"setPressed",boolean.class);
+  java.lang.reflect.Field nativeAnimator=null;try{java.lang.reflect.Field field=c.getDeclaredField("t");if(android.animation.ValueAnimator.class.isAssignableFrom(field.getType())){field.setAccessible(true);nativeAnimator=field;}}catch(Throwable ignored){}
+  final java.lang.reflect.Field stockAnimation=nativeAnimator;
   XposedBridge.hookAllConstructors(c,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(keys.containsKey(v))return;KeyState s=new KeyState(v);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);if(v.isAttachedToWindow())s.apply(v);}catch(Throwable t){log("key init: "+t);}}});
-  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper)s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("key press: "+t);}}});
+  XposedBridge.hookMethod(pressed,new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&v.isAttachedToWindow()){s.apply(v);if(v.getBackground()==s.wrapper){if(stockAnimation!=null){Object a=stockAnimation.get(v);if(a instanceof android.animation.ValueAnimator&&((android.animation.ValueAnimator)a).isRunning())((android.animation.ValueAnimator)a).cancel();}s.skin.press((boolean)p.args[0]);}}}catch(Throwable t){log("key press: "+t);}}});
  }
  private static String idName(View v){int id=v.getId();if(id==View.NO_ID)return "";try{return v.getResources().getResourceEntryName(id);}catch(Throwable t){return "";}}
  private static boolean inDialpad(View v){View x=v;while(x!=null){if("keypad_fragment".equals(idName(x)))return true;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return false;}
- private static boolean eraseKey(View v){String name=idName(v);return ("delete_button".equals(name)||"dialpad_delete_button".equals(name)||"dialpad_widget_key_delete_button_china".equals(name))&&inDialpad(v);}
+ private static final String CALL_LAYOUT=PKG+".dialpad.view.widget.DialpadCallButtonLayout";
+ private static View descendant(View root,String name){if(name.equals(idName(root)))return root;if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){View found=descendant(g.getChildAt(i),name);if(found!=null)return found;}}return null;}
+ private static boolean eraseKey(View v){String name=idName(v);return ("dialpad_delete_button".equals(name)||"dialpad_widget_key_delete_button_china".equals(name))&&inDialpad(v);}
+ private static View deleteRoot(View v){View x=v;for(int i=0;i<4&&x!=null;i++){if(CALL_LAYOUT.equals(x.getClass().getName())&&descendant(x,"delete_button_image")!=null&&descendant(x,"delete_button_background_layout")!=null)return x;android.view.ViewParent p=x.getParent();x=p instanceof View?(View)p:null;}return null;}
+ private static void installDelete(View v){if(v==null||!v.isAttachedToWindow())return;KeyState s=keys.get(v);if(s==null){s=new KeyState(v);s.skin.erase(true);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);}s.apply(v);}
+
  private static boolean blackSurface(View v){String n=idName(v);return "keypad_fragment".equals(n)||"keypad_view".equals(n)||"dialpad_container".equals(n)||"dialpad_search_list_view".equals(n)||"toggle_container".equals(n)||"input_number_container".equals(n);}
  private static final WeakHashMap<View,Drawable> surfaces=new WeakHashMap<>();
  private static void black(View v){if(!blackSurface(v)||!inDialpad(v))return;if(dark(v)){if(!surfaces.containsKey(v))surfaces.put(v,v.getBackground());if(!(v.getBackground() instanceof android.graphics.drawable.ColorDrawable)||((android.graphics.drawable.ColorDrawable)v.getBackground()).getColor()!=Color.BLACK){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundColor(Color.BLACK);v.setPaddingRelative(a,b,c,d);}}else if(surfaces.containsKey(v)){Drawable old=surfaces.remove(v);int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(old);v.setPaddingRelative(a,b,c,d);}}
  private static void installDialpadDetails()throws Exception {
-  XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v)){KeyState s=keys.get(v);if(s==null){s=new KeyState(v);s.skin.erase(true);keys.put(v,s);v.addOnAttachStateChangeListener(s);v.addOnLayoutChangeListener(s);}s.apply(v);}}catch(Throwable t){log("dialpad detail: "+t);}}});
-  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("onAttachedToWindow"),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;if(blackSurface(v))black(v);if(eraseKey(v))installDelete(v);
+   String name=idName(v);if(CALL_LAYOUT.equals(v.getClass().getName())||"delete_button_image".equals(name)||"delete_button_background_layout".equals(name)){View root=deleteRoot(v);if(root!=null)root.post(()->{try{installDelete(root);}catch(Throwable e){log("delete root: "+e);}});}}catch(Throwable t){log("dialpad detail: "+t);}}});
+  XposedBridge.hookMethod(View.class.getDeclaredMethod("setPressed",boolean.class),new XC_MethodHook(){@Override protected void afterHookedMethod(MethodHookParam p){try{View v=(View)p.thisObject;KeyState s=keys.get(v);if(s==null&&("delete_button_image".equals(idName(v))||"delete_button_background_layout".equals(idName(v)))){View root=deleteRoot(v);if(root!=null){installDelete(root);v=root;s=keys.get(root);}}if(s!=null&&s.skin.erase&&v.isAttachedToWindow()){s.apply(v);s.skin.press((boolean)p.args[0]);}}catch(Throwable t){log("delete feedback: "+t);}}});
  }
  private static final class KeyState implements View.OnAttachStateChangeListener,View.OnLayoutChangeListener {
   final Visuals.Key skin;final RippleDrawable wrapper;final WeakReference<View> view;
   Drawable stock;ColorStateList stockTint;boolean failed,reported,captured;
   float baseX=1,baseY=1;
+  View innerDelete; Drawable innerStock; boolean innerCaptured;
   final WeakHashMap<TextView,ColorStateList> labels=new WeakHashMap<>();
   final WeakHashMap<ImageView,ColorStateList> icons=new WeakHashMap<>();
   final ArgbEvaluator evaluator=new ArgbEvaluator();
@@ -75,14 +84,15 @@ public final class Hooks implements IXposedHookLoadPackage {
    float width=Math.max(1,Math.min(v.getWidth(),v.getHeight()));
    float scale=1-Visuals.clamp(3*dp(v)/width,0,.09f)*skin.recoil;
    v.setScaleX(baseX*scale);v.setScaleY(baseY*scale);
-   for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;int from=skin.dark?0xfffcfcff:0xff3a3a3d,to=0xff41c19f;
+   for(TextView t:new ArrayList<>(labels.keySet())){if(t==null)continue;int from=skin.dark?0xfffcfcff:0xff3a3a3d,to=(skin.dark?0xff99ded2:0xff41c19f);
     int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);if(t.getCurrentTextColor()!=c)t.setTextColor(c);}
    if(skin.erase)for(ImageView i:new ArrayList<>(icons.keySet())){if(i==null)continue;int from=skin.dark?0xffed6968:0xfff56962,to=0xffffb3b3;int c=(int)evaluator.evaluate(Visuals.clamp(skin.glow,0,1),from,to);ColorStateList old=i.getImageTintList();if(old==null||old.getDefaultColor()!=c)i.setImageTintList(ColorStateList.valueOf(c));}
   }
   void apply(View v){if(failed||!v.isAttachedToWindow())return;try{skin.dark(dark(v));discover(v);
+   if(skin.erase&&CALL_LAYOUT.equals(v.getClass().getName())){View inner=descendant(v,"delete_button_background_layout");if(inner!=null&&inner.getBackground()!=null){if(!innerCaptured){innerDelete=inner;innerStock=inner.getBackground();innerCaptured=true;}int a=inner.getPaddingStart(),b=inner.getPaddingTop(),c=inner.getPaddingEnd(),d=inner.getPaddingBottom();inner.setBackground(null);inner.setPaddingRelative(a,b,c,d);}}
    if(v.getBackground()!=wrapper){stock=v.getBackground();stockTint=v.getBackgroundTintList();if(!captured){baseX=v.getScaleX();baseY=v.getScaleY();}captured=true;int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackgroundTintList(null);v.setBackground(wrapper);v.setPaddingRelative(a,b,c,d);if(!reported){reported=true;log(skin.erase?"calculator red delete feedback active":"calculator recoil keypad v3 active");}}else if(v.getBackgroundTintList()!=null)v.setBackgroundTintList(null);paintFrame();
   }catch(Throwable e){failed=true;restore(v);log("key reverted: "+e);}}
-  void restore(View v){skin.stop();for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}v.setScaleX(baseX);v.setScaleY(baseY);captured=false;}
+  void restore(View v){skin.stop();if(innerCaptured&&innerDelete!=null&&innerDelete.getBackground()==null){int a=innerDelete.getPaddingStart(),b=innerDelete.getPaddingTop(),c=innerDelete.getPaddingEnd(),d=innerDelete.getPaddingBottom();innerDelete.setBackground(innerStock);innerDelete.setPaddingRelative(a,b,c,d);}innerCaptured=false;innerDelete=null;innerStock=null;for(TextView t:new ArrayList<>(labels.keySet()))if(t!=null&&labels.get(t)!=null)t.setTextColor(labels.get(t));for(ImageView i:new ArrayList<>(icons.keySet()))if(i!=null)i.setImageTintList(icons.get(i));labels.clear();icons.clear();if(captured&&v.getBackground()==wrapper){int a=v.getPaddingStart(),b=v.getPaddingTop(),c=v.getPaddingEnd(),d=v.getPaddingBottom();v.setBackground(stock);v.setBackgroundTintList(stockTint);v.setPaddingRelative(a,b,c,d);}v.setScaleX(baseX);v.setScaleY(baseY);captured=false;}
   @Override public void onViewAttachedToWindow(View v){apply(v);}
   @Override public void onViewDetachedFromWindow(View v){restore(v);}
   @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){apply(v);}
