@@ -18,3 +18,6 @@ Correct normal-dialer backspace layout (DialpadCallButtonLayout with delete_butt
 
 ## v0.5 — AMOLED-only test
 Enable system Dark mode. Samsung Dialer resource allowlist and guarded neutral surface recoloring target main app windows, keypad, recents, contacts, search, settings, cards and dialogs. Full coverage is not device-verified. Text, colored controls, ripple/selector state and calling behavior are not intentionally changed. Previous custom keypad/slider hooks are kept in source but disabled in this test build. InCallUI and separate Contacts processes are not targeted. Light mode is stock. Debug signatures may differ between runs.
+
+## v0.6
+Retains v0.5 dark AMOLED theme; re-enables experimental keypad and slider. Same visual radius across visible keypad keys, centered primary digits with guarded adjustment, spring release, improved short-tap visibility, velocity-assisted drag settling and native tab model selection fallback on the supplied firmware. No claim of device validation, exact glass refraction or universal alignment. Test portrait, landscape, font sizes and all three tabs. Disable module if dialing is affected.
