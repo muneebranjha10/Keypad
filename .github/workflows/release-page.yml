@@ -1,19 +1,26 @@
-name: Polish GitHub release page
+name: Clean up superseded releases
 on:
   push:
     branches: [main]
     paths:
       - 'docs/release-v1.8.1.md'
-  workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  release-notes:
+  cleanup:
+    if: github.event.head_commit.message == 'docs: keep only latest AMOLED release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update published release notes without replacing APK
+      - name: Verify retained APK, then remove superseded releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit v1.8.1 --title 'Glass Dialer v1.8.1 — AMOLED Edition' --notes-file docs/release-v1.8.1.md --prerelease=false --draft=false --latest
+          set -euo pipefail
+          gh api repos/$GITHUB_REPOSITORY/releases/tags/v1.8.1 > /tmp/retained.json
+          jq -e '.draft == false and .prerelease == false and any(.assets[]; .name == "GlassDialer-v1.8.1.apk" and .digest == "sha256:b6130a70e06d7c835b51f67bd23f0b85c937cbded47994f9799c2bf83078fba9")' /tmp/retained.json
+          gh release edit v1.8.1 --title 'Glass Dialer v1.8.1 — AMOLED Edition' --notes-file docs/release-v1.8.1.md --latest
+          for tag in v1.8 v1.7-beta v1.6-beta v1.5-beta v1.4-beta v1.3-beta v1.2-beta v1.1-beta v1.0-beta v0.9-beta v0.8-beta v0.7-beta v0.5-amoled v0.3-beta v0.2-beta v0.1-beta; do
+            if gh release view "$tag" >/dev/null 2>&1; then gh release delete "$tag" --yes; fi
+          done
+          gh api repos/$GITHUB_REPOSITORY/releases?per_page=100 --jq '.[].tag_name'
