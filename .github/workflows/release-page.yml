@@ -1,0 +1,19 @@
+name: Polish GitHub release page
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/release-v1.8.1.md'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update published release notes without replacing APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit v1.8.1 --title 'Glass Dialer v1.8.1 — AMOLED Edition' --notes-file docs/release-v1.8.1.md --prerelease=false --draft=false --latest
